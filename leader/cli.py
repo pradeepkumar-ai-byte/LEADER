@@ -27,6 +27,7 @@ from .registry import Registry
 from .logger import TaskLogger
 from .router import Router
 from .executor import Executor
+from .auditor import AutonomousAuditor
 from . import config as cfg_module
 
 console = Console()
@@ -214,6 +215,12 @@ def cmd_vscode_extension(args):
 
 # ── entry point ───────────────────────────────────────────────────────────────
 
+def cmd_review(args):
+    target = getattr(args, "path", ".")
+    registry, logger, _, executor = build_context()
+    auditor = AutonomousAuditor(registry, logger, executor)
+    asyncio.run(auditor.audit_and_fix(target, max_issues=15))
+
 def main():
     parser = argparse.ArgumentParser(
         prog="leader",
@@ -250,11 +257,16 @@ def main():
     p_vsc.add_argument("--output", default="./leader-vscode", help="Output directory")
     p_vsc.add_argument("--server-url", default="http://127.0.0.1:8585", help="Leader server URL")
 
+    # review
+    p_review = sub.add_parser("review", help="Autonomous multi-agent code audit and auto-fix")
+    p_review.add_argument("path", nargs="?", default=".", help="Directory to audit (default: ./)")
+
     args = parser.parse_args()
     dispatch = {
         "run": cmd_run, "backends": cmd_backends, "ping": cmd_ping,
         "stats": cmd_stats, "feedback": cmd_feedback, "init": cmd_init,
         "serve": cmd_serve, "vscode-extension": cmd_vscode_extension,
+        "review": cmd_review,
     }
     if args.command in dispatch:
         dispatch[args.command](args)
