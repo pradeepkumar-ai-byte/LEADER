@@ -44,14 +44,36 @@ class Executor:
                 output="", success=False, latency_ms=0,
                 error=f"Backend '{backend_id}' not available or misconfigured.",
             )
-        try:
-            return await asyncio.wait_for(adapter.run(task), timeout=self.timeout)
-        except asyncio.TimeoutError:
-            return TaskResult(
-                task_id=task.task_id, backend_id=backend_id,
-                output="", success=False, latency_ms=self.timeout * 1000,
-                error=f"Timed out after {self.timeout}s",
-            )
+        
+        max_retries = 3
+        backoff_factor = 1.0  # start with 1 second sleep
+        
+        for attempt in range(max_retries):
+            t0 = time.monotonic()
+            try:
+                # Execute the adapter call with a timeout
+                return await asyncio.wait_for(adapter.run(task), timeout=self.timeout)
+            except (asyncio.TimeoutError, Exception) as exc:
+                latency = (time.monotonic() - t0) * 1000
+                is_timeout = isinstance(exc, asyncio.TimeoutError)
+                err_msg = f"Timed out after {self.timeout}s" if is_timeout else str(exc)
+                
+                # If we've exhausted our retries, return the failed TaskResult
+                if attempt == max_retries - 1:
+                    return TaskResult(
+                        task_id=task.task_id,
+                        backend_id=backend_id,
+                        output="",
+                        success=False,
+                        latency_ms=latency,
+                        error=f"All {max_retries} attempts failed. Last error: {err_msg}",
+                    )
+                
+                # Log the warning and sleep before next retry (exponential backoff)
+                sleep_time = backoff_factor * (1.5 ** attempt)
+                print(f"  [leader] Warning: {backend_id} failed on attempt {attempt + 1}/{max_retries} ({err_msg}). Retrying in {sleep_time:.1f}s...")
+                await asyncio.sleep(sleep_time)
+
 
     async def run(self, task: Task, decision: RouteDecision,
                   parallel: bool = False) -> TaskResult:
