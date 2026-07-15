@@ -161,7 +161,7 @@ Leader ships with built-in adapters mapping tasks to standard platforms:
 
 ## Verification
 
-Leader includes a comprehensive test suite (35 unit and integration tests) verifying routing decisions, SQLite history logging, database migrations, and adapter execution.
+Leader includes a comprehensive test suite (42 unit and integration tests) verifying routing decisions, SQLite history logging, database migrations, and adapter execution.
 
 To run tests:
 ```bash

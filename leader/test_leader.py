@@ -202,8 +202,8 @@ def test_logger_win_rate_success(tmp_path):
 
 def test_logger_win_rate_mixed(tmp_path):
     logger = TaskLogger(tmp_path / "test.db")
-    for success in [True, True, False, False]:
-        task = Task(prompt="x", category=TaskCategory.CODING)
+    for i, success in enumerate([True, True, False, False]):
+        task = Task(prompt="x", category=TaskCategory.CODING, task_id=f"t{i}")
         logger.log_dispatch(task, RouteDecision(primary="zeroclaw", fallback_chain=[], rationale="t"))
         logger.log_result(TaskResult(task_id=task.task_id, backend_id="zeroclaw",
                                      output="", success=success, latency_ms=50))
@@ -214,3 +214,147 @@ def test_logger_feedback(tmp_path):
     logger.log_feedback("task123", 5, "perfect")
     cur = logger.conn.execute("SELECT rating FROM feedback WHERE task_id='task123'")
     assert cur.fetchone()[0] == 5
+
+
+# ── retry / backoff ──────────────────────────────────────────────────────────
+# These tests exercise the executor's smart retry logic.  We mock adapters at
+# the _load_adapter level to inject controlled failures and count invocations.
+
+from unittest.mock import AsyncMock, patch, MagicMock
+from leader.executor import _is_retryable, _NO_RETRY_CATEGORIES
+
+
+def _make_mock_adapter(side_effects):
+    """Create a mock adapter whose .run() yields *side_effects* in order."""
+    adapter = MagicMock()
+    adapter.is_available.return_value = True
+    adapter.run = AsyncMock(side_effect=side_effects)
+    return adapter
+
+
+def test_retry_transient_error_is_retried(tmp_path):
+    """A ConnectionError (transient) should be retried up to max_retries."""
+    r = fresh_registry("openclaw")
+    adapter = _make_mock_adapter([
+        ConnectionError("connection refused"),
+        ConnectionError("connection refused"),
+        TaskResult(task_id="t1", backend_id="openclaw",
+                   output="ok", success=True, latency_ms=50),
+    ])
+    executor = Executor(r, timeout=5, max_retries=3)
+    task = Task(prompt="write code", category=TaskCategory.CODING)
+    d = RouteDecision(primary="openclaw", fallback_chain=[], rationale="test")
+
+    with patch("leader.executor._load_adapter", return_value=adapter), \
+         patch("leader.executor.asyncio.sleep", new_callable=AsyncMock):
+        result = asyncio.run(executor.run(task, d))
+
+    assert result.success
+    assert adapter.run.call_count == 3  # called 3 times total
+
+
+def test_retry_programming_bug_fails_fast(tmp_path):
+    """A TypeError (programming bug) must NOT be retried — fail immediately."""
+    r = fresh_registry("openclaw")
+    adapter = _make_mock_adapter([TypeError("bad argument")])
+    executor = Executor(r, timeout=5, max_retries=3)
+    task = Task(prompt="write code", category=TaskCategory.CODING)
+    d = RouteDecision(primary="openclaw", fallback_chain=[], rationale="test")
+
+    with patch("leader.executor._load_adapter", return_value=adapter), \
+         patch("leader.executor.asyncio.sleep", new_callable=AsyncMock):
+        result = asyncio.run(executor.run(task, d))
+
+    assert not result.success
+    assert "bad argument" in result.error
+    assert adapter.run.call_count == 1  # failed fast, no retries
+
+
+def test_retry_valueerror_fails_fast(tmp_path):
+    """A ValueError (config/logic error) must NOT be retried."""
+    r = fresh_registry("openclaw")
+    adapter = _make_mock_adapter([ValueError("invalid config")])
+    executor = Executor(r, timeout=5, max_retries=3)
+    task = Task(prompt="research papers", category=TaskCategory.RESEARCH)
+    d = RouteDecision(primary="openclaw", fallback_chain=[], rationale="test")
+
+    with patch("leader.executor._load_adapter", return_value=adapter), \
+         patch("leader.executor.asyncio.sleep", new_callable=AsyncMock):
+        result = asyncio.run(executor.run(task, d))
+
+    assert not result.success
+    assert adapter.run.call_count == 1
+
+
+def test_retry_messaging_never_retries(tmp_path):
+    """MESSAGING tasks must never retry — even on transient errors — to prevent
+    double-sending notifications/messages."""
+    r = fresh_registry("openclaw")
+    adapter = _make_mock_adapter([ConnectionError("network blip")])
+    executor = Executor(r, timeout=5, max_retries=3)
+    task = Task(prompt="send a slack message", category=TaskCategory.MESSAGING)
+    d = RouteDecision(primary="openclaw", fallback_chain=[], rationale="test")
+
+    with patch("leader.executor._load_adapter", return_value=adapter), \
+         patch("leader.executor.asyncio.sleep", new_callable=AsyncMock):
+        result = asyncio.run(executor.run(task, d))
+
+    assert not result.success
+    assert adapter.run.call_count == 1  # no retry for side-effecting category
+
+
+def test_retry_automation_never_retries(tmp_path):
+    """AUTOMATION tasks (webhooks, cron triggers) must never retry."""
+    r = fresh_registry("openclaw")
+    adapter = _make_mock_adapter([OSError("broken pipe")])
+    executor = Executor(r, timeout=5, max_retries=3)
+    task = Task(prompt="schedule daily report", category=TaskCategory.AUTOMATION)
+    d = RouteDecision(primary="openclaw", fallback_chain=[], rationale="test")
+
+    with patch("leader.executor._load_adapter", return_value=adapter), \
+         patch("leader.executor.asyncio.sleep", new_callable=AsyncMock):
+        result = asyncio.run(executor.run(task, d))
+
+    assert not result.success
+    assert adapter.run.call_count == 1
+
+
+def test_retry_exhaustion_reports_all_attempts(tmp_path):
+    """When all retries are exhausted, error message must mention attempt count."""
+    r = fresh_registry("openclaw")
+    adapter = _make_mock_adapter([
+        ConnectionError("fail 1"),
+        ConnectionError("fail 2"),
+        ConnectionError("fail 3"),
+    ])
+    executor = Executor(r, timeout=5, max_retries=3)
+    task = Task(prompt="write code", category=TaskCategory.CODING)
+    d = RouteDecision(primary="openclaw", fallback_chain=[], rationale="test")
+
+    with patch("leader.executor._load_adapter", return_value=adapter), \
+         patch("leader.executor.asyncio.sleep", new_callable=AsyncMock):
+        result = asyncio.run(executor.run(task, d))
+
+    assert not result.success
+    assert "All 3 attempts failed" in result.error
+    assert adapter.run.call_count == 3
+
+
+def test_is_retryable_helper():
+    """Unit test for the _is_retryable classification function."""
+    coding_task = Task(prompt="code", category=TaskCategory.CODING)
+    msg_task = Task(prompt="send msg", category=TaskCategory.MESSAGING)
+
+    # Transient + safe category → retryable
+    assert _is_retryable(ConnectionError(), coding_task) is True
+    assert _is_retryable(OSError(), coding_task) is True
+    assert _is_retryable(asyncio.TimeoutError(), coding_task) is True
+
+    # Programming bug → never retryable
+    assert _is_retryable(TypeError(), coding_task) is False
+    assert _is_retryable(ValueError(), coding_task) is False
+    assert _is_retryable(KeyError(), coding_task) is False
+
+    # Transient + side-effecting category → never retryable
+    assert _is_retryable(ConnectionError(), msg_task) is False
+    assert _is_retryable(OSError(), msg_task) is False

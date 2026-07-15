@@ -15,6 +15,7 @@ This is the initial open-source release of Leader.
 - **Fallback Chains**: Automatically routes to fallback backends on execution failure.
 - **Parallel Mode**: Race multiple backends simultaneously and return the fastest successful result.
 - **Introspection Tools**: CLI commands `backends`, `stats`, `ping`, and `feedback`.
+- **Smart Retries**: Automatic exponential backoff retries for transient network errors (safely avoiding side-effecting tasks like messaging).
 - **Built-in Adapters**: Support for 30+ adapters including agent platforms, orchestration frameworks, LLM providers, and no-code automation.
 - **Python SDK**: Simple 3-line embedding interface (`from leader import Leader`).
 - **REST API Server**: aiohttp-based API server with endpoints for routing, execution, and stats.
