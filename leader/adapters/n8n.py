@@ -1,0 +1,28 @@
+"""Leader – N8N automation adapter"""
+from __future__ import annotations
+import time
+import aiohttp
+from ..models import Task, TaskResult
+from .base import BaseAdapter
+
+class N8NAdapter(BaseAdapter):
+    def is_available(self) -> bool:
+        return bool(self.config.get("base_url") and self.config.get("workflow_id"))
+    async def run(self, task: Task) -> TaskResult:
+        base_url = self.config.get("base_url", "").rstrip("/")
+        workflow_id = self.config.get("workflow_id")
+        url = f"{base_url}/webhook/{workflow_id}"
+        t0 = time.monotonic()
+        try:
+            headers = {"Content-Type": "application/json"}
+            payload = {"data": task.prompt, "query": task.prompt}
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=180)) as resp:
+                    latency = (time.monotonic() - t0) * 1000
+                    if resp.status in (200, 201):
+                        data = await resp.json()
+                        return TaskResult(task_id=task.task_id, backend_id="n8n", output=str(data.get("result", data)), success=True, latency_ms=latency)
+                    else:
+                        return TaskResult(task_id=task.task_id, backend_id="n8n", output="", success=False, latency_ms=latency, error=f"HTTP {resp.status}")
+        except Exception as exc:
+            return TaskResult(task_id=task.task_id, backend_id="n8n", output="", success=False, latency_ms=(time.monotonic() - t0) * 1000, error=str(exc))

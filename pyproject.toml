@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "leader-agent"
+version = "0.1.0"
+description = "A credential-aware router that evolves which specialist to dispatch each task to, sitting above OpenClaw, Hermes, ZeroClaw, or any REST-accessible agent backend."
+readme = "README.md"
+license = "MIT"
+authors = [
+    {name = "Krish", email = "pradeepkumar.ai.byte@gmail.com"},
+]
+maintainers = [
+    {name = "Krish", email = "pradeepkumar.ai.byte@gmail.com"},
+]
+keywords = ["agent", "routing", "llm", "backend", "orchestration", "multi-agent", "router", "ai", "plugin", "sdk"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "aiohttp>=3.8.0",
+    "pyyaml>=6.0",
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+leader = "leader.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/pradeepkumar-ai-byte/LEADER"
+Repository = "https://github.com/pradeepkumar-ai-byte/LEADER"
+Issues = "https://github.com/pradeepkumar-ai-byte/LEADER/issues"
+Documentation = "https://github.com/pradeepkumar-ai-byte/LEADER#readme"
+Sponsors = "https://github.com/sponsors/pradeepkumar-ai-byte"
+
+[tool.setuptools]
+packages = ["leader", "leader.adapters", "leader.plugins"]
+
+[tool.setuptools.package-data]
+leader = ["py.typed"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311", "py312"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "W", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+python_files = "test_*.py"
+asyncio_mode = "auto"

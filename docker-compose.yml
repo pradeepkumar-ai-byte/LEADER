@@ -1,0 +1,27 @@
+version: "3.8"
+
+services:
+  leader:
+    build: .
+    container_name: leader-api
+    ports:
+      - "8585:8585"
+    volumes:
+      # Persist config and history across restarts
+      - leader-config:/root/.leader
+    environment:
+      # Set your API keys here (recommended over config file)
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      # Add backend-specific keys:
+      # - LEADER_API_KEY_OPENCLAW=${LEADER_API_KEY_OPENCLAW:-}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8585/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  leader-config:
