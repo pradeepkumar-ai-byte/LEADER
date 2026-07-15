@@ -3,9 +3,6 @@ Leader – adapter plugins for various agent backends
 """
 from .base import BaseAdapter
 from .direct_llm import DirectLLMAdapter
-from .openclaw import OpenClawAdapter
-from .hermes import HermesAdapter
-from .zeroclaw import ZeroClawAdapter
 from .generic_rest import GenericRestAdapter
 from .autogpt import AutoGPTAdapter
 from .agentgpt import AgentGPTAdapter
@@ -34,9 +31,6 @@ from .stabilityai import StabilityAIAdapter
 __all__ = [
     "BaseAdapter",
     "DirectLLMAdapter",
-    "OpenClawAdapter",
-    "HermesAdapter",
-    "ZeroClawAdapter",
     "GenericRestAdapter",
     "AutoGPTAdapter",
     "AgentGPTAdapter",

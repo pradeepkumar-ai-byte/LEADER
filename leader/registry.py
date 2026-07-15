@@ -30,33 +30,7 @@ CATALOGUE: dict[str, BackendSpec] = {
         homepage="https://github.com/leader-agent/leader",
         adapter_class="leader.adapters.direct_llm.DirectLLMAdapter",
     ),
-    "openclaw": BackendSpec(
-        id="openclaw",
-        display_name="OpenClaw",
-        description="Full-featured personal AI assistant with 20+ platform integrations and a large skill marketplace.",
-        strengths=[TaskCategory.MESSAGING, TaskCategory.AUTOMATION, TaskCategory.GENERAL],
-        weaknesses=[TaskCategory.DATA],
-        homepage="https://github.com/openclaw/openclaw",
-        adapter_class="leader.adapters.openclaw.OpenClawAdapter",
-    ),
-    "hermes": BackendSpec(
-        id="hermes",
-        display_name="Hermes Agent",
-        description="Self-improving agent (Nous Research) that writes reusable skills from its own task history.",
-        strengths=[TaskCategory.AUTOMATION, TaskCategory.RESEARCH, TaskCategory.GENERAL],
-        weaknesses=[TaskCategory.MESSAGING],
-        homepage="https://github.com/NousResearch/hermes",
-        adapter_class="leader.adapters.hermes.HermesAdapter",
-    ),
-    "zeroclaw": BackendSpec(
-        id="zeroclaw",
-        display_name="ZeroClaw",
-        description="Lightweight Rust-based agent. Minimal overhead, ideal for constrained or headless environments.",
-        strengths=[TaskCategory.CODING, TaskCategory.AUTOMATION],
-        weaknesses=[TaskCategory.CREATIVE, TaskCategory.MULTIAGENT],
-        homepage="https://github.com/zeroclaw/zeroclaw",
-        adapter_class="leader.adapters.zeroclaw.ZeroClawAdapter",
-    ),
+
     "autogpt": BackendSpec(
         id="autogpt",
         display_name="AutoGPT",
@@ -264,15 +238,7 @@ CATALOGUE: dict[str, BackendSpec] = {
         homepage="https://stability.ai",
         adapter_class="leader.adapters.stabilityai.StabilityAIAdapter",
     ),
-    "nanoclaw": BackendSpec(
-        id="nanoclaw",
-        display_name="NanoClaw",
-        description="Security-first agent with OS-level container isolation per task.",
-        strengths=[TaskCategory.CODING, TaskCategory.GENERAL],
-        weaknesses=[TaskCategory.MESSAGING],
-        homepage="https://github.com/nanoclaw/nanoclaw",
-        adapter_class="leader.adapters.generic_rest.GenericRestAdapter",
-    ),
+
     "crewai": BackendSpec(
         id="crewai",
         display_name="CrewAI",

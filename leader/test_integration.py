@@ -10,6 +10,7 @@ import io
 import os
 import tempfile
 from pathlib import Path
+import contextlib
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -18,8 +19,6 @@ from rich.console import Console
 from leader.cli import main
 from leader.models import TaskResult
 
-
-import contextlib
 
 # Helper to run CLI main with custom arguments and capture Rich Console and stdout output
 def run_cli(args: list[str]) -> tuple[int, str]:
@@ -43,7 +42,6 @@ def run_cli(args: list[str]) -> tuple[int, str]:
             exit_code = args[0] if args else 0
 
     return exit_code, captured_buffer.getvalue()
-
 
 
 @pytest.fixture
@@ -93,7 +91,7 @@ def test_cli_init(temp_home):
 def test_cli_backends_unconfigured(temp_home):
     code, output = run_cli(["backends"])
     assert code == 0
-    # Should list registered backends (like OpenClaw, direct_llm) but show them unconfigured/not connected
+    # Should list registered backends (like CrewAI, direct_llm) but show them unconfigured/not connected
     assert "backends" in output.lower()
     assert "not connected" in output
 
@@ -103,13 +101,13 @@ def test_cli_backends_configured(temp_home):
     run_cli(["init"])
     config_file = temp_home / ".leader" / "config.yaml"
     
-    # Configure direct_llm and openclaw
+    # Configure direct_llm and crewai
     config_content = """
 backends:
   direct_llm:
     provider: anthropic
     api_key: sk-ant-testkey
-  openclaw:
+  crewai:
     base_url: http://localhost:8888
 """
     config_file.write_text(config_content, encoding="utf-8")
@@ -118,7 +116,7 @@ backends:
     assert code == 0
     assert "connected" in output.lower()
     assert "direct_llm" in output
-    assert "openclaw" in output
+    assert "crewai" in output
 
 
 def test_cli_ping_unconfigured(temp_home):
@@ -196,7 +194,6 @@ backends:
     assert "stats" in output.lower()
     assert "direct_llm" in output
     assert "100%" in output  # win rate
-
 
 
 def test_cli_feedback(temp_home):
