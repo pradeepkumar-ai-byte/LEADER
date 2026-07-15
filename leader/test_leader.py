@@ -70,9 +70,9 @@ def test_registry_empty_connected():
     assert r.connected() == []
 
 def test_registry_connect_backend():
-    r = fresh_registry("n8n")
+    r = fresh_registry("openclaw")
     assert len(r.connected()) == 1
-    assert r.connected()[0].id == "n8n"
+    assert r.connected()[0].id == "openclaw"
 
 def test_registry_direct_llm_needs_api_key():
     r = fresh_registry()
@@ -84,7 +84,7 @@ def test_registry_direct_llm_needs_api_key():
 def test_registry_missing_specialists_messaging():
     r = fresh_registry()  # nothing connected
     ids = [s.id for s in r.missing_specialists(TaskCategory.MESSAGING)]
-    assert "n8n" in ids
+    assert "openclaw" in ids
     assert "direct_llm" not in ids  # universal, not a specialist
 
 def test_registry_custom_backend():
@@ -109,53 +109,53 @@ def test_router_no_backends(tmp_path):
     assert d.primary == "none"
 
 def test_router_picks_messaging_specialist(tmp_path):
-    r = fresh_registry("n8n", "autogen")
+    r = fresh_registry("openclaw", "hermes")
     router, _ = make_router(r, tmp_path)
     d = router.decide(Task(prompt="send a whatsapp message to my team"))
-    assert d.primary == "n8n"
+    assert d.primary == "openclaw"
 
 def test_router_sets_category(tmp_path):
-    r = fresh_registry("n8n")
+    r = fresh_registry("openclaw")
     router, _ = make_router(r, tmp_path)
     task = Task(prompt="write me a python script")
     router.decide(task)
     assert task.category == TaskCategory.CODING
 
 def test_router_fallback_chain(tmp_path):
-    r = fresh_registry("n8n", "autogen", "direct_llm")
+    r = fresh_registry("openclaw", "hermes", "direct_llm")
     router, _ = make_router(r, tmp_path)
     d = router.decide(Task(prompt="anything"))
     assert len(d.fallback_chain) == 2
 
 def test_router_recommendation_for_missing(tmp_path):
-    # Only autogen connected; n8n (messaging specialist) not connected
-    r = fresh_registry("autogen")
+    # Only hermes connected; openclaw (messaging specialist) not connected
+    r = fresh_registry("hermes")
     router, _ = make_router(r, tmp_path)
     d = router.decide(Task(prompt="send a telegram notification"))
     assert d.recommendation is not None
 
 def test_router_evolves_with_history(tmp_path):
-    r = fresh_registry("n8n", "autogen")
+    r = fresh_registry("openclaw", "hermes")
     logger = TaskLogger(tmp_path / "test.db")
 
-    # autogen wins on research 5/5
+    # hermes wins on research 5/5
     for _ in range(5):
         task = Task(prompt="research x", category=TaskCategory.RESEARCH)
-        d = RouteDecision(primary="autogen", fallback_chain=[], rationale="t")
+        d = RouteDecision(primary="hermes", fallback_chain=[], rationale="t")
         logger.log_dispatch(task, d)
-        logger.log_result(TaskResult(task_id=task.task_id, backend_id="autogen",
+        logger.log_result(TaskResult(task_id=task.task_id, backend_id="hermes",
                                      output="ok", success=True, latency_ms=100))
-    # n8n fails on research 5/5
+    # openclaw fails on research 5/5
     for _ in range(5):
         task = Task(prompt="research x", category=TaskCategory.RESEARCH)
-        d = RouteDecision(primary="n8n", fallback_chain=[], rationale="t")
+        d = RouteDecision(primary="openclaw", fallback_chain=[], rationale="t")
         logger.log_dispatch(task, d)
-        logger.log_result(TaskResult(task_id=task.task_id, backend_id="n8n",
+        logger.log_result(TaskResult(task_id=task.task_id, backend_id="openclaw",
                                      output="", success=False, latency_ms=100))
 
     router = Router(r, logger)
     decision = router.decide(Task(prompt="find latest research papers"))
-    assert decision.primary == "autogen"
+    assert decision.primary == "hermes"
 
 
 # ── executor ──────────────────────────────────────────────────────────────────
@@ -169,23 +169,23 @@ def test_executor_no_backends(tmp_path):
     assert "No backends connected" in result.error
 
 def test_executor_unreachable_fails_gracefully(tmp_path):
-    r = fresh_registry("n8n")
-    r.get("n8n").config = {"base_url": "http://localhost:1"}
+    r = fresh_registry("openclaw")
+    r.get("openclaw").config = {"base_url": "http://localhost:1"}
     executor = Executor(r, timeout=2)
-    d = RouteDecision(primary="n8n", fallback_chain=[], rationale="test")
+    d = RouteDecision(primary="openclaw", fallback_chain=[], rationale="test")
     result = asyncio.run(executor.run(Task(prompt="hello"), d))
     assert not result.success  # fails gracefully
 
 def test_executor_falls_back_to_second(tmp_path):
-    r = fresh_registry("n8n")
-    r.get("n8n").config = {"base_url": "http://localhost:1"}  # dead
+    r = fresh_registry("openclaw")
+    r.get("openclaw").config = {"base_url": "http://localhost:1"}  # dead
     # direct_llm also misconfigured
     s = r.get("direct_llm")
     s.connected = True
     s.config = {}  # missing api_key — won't be in connected()
 
     executor = Executor(r, timeout=2)
-    d = RouteDecision(primary="n8n", fallback_chain=["direct_llm"], rationale="test")
+    d = RouteDecision(primary="openclaw", fallback_chain=["direct_llm"], rationale="test")
     result = asyncio.run(executor.run(Task(prompt="hello"), d))
     assert not result.success  # both fail gracefully
 
@@ -195,19 +195,19 @@ def test_executor_falls_back_to_second(tmp_path):
 def test_logger_win_rate_success(tmp_path):
     logger = TaskLogger(tmp_path / "test.db")
     task = Task(prompt="x", category=TaskCategory.CODING)
-    logger.log_dispatch(task, RouteDecision(primary="n8n", fallback_chain=[], rationale="t"))
-    logger.log_result(TaskResult(task_id=task.task_id, backend_id="n8n",
+    logger.log_dispatch(task, RouteDecision(primary="openclaw", fallback_chain=[], rationale="t"))
+    logger.log_result(TaskResult(task_id=task.task_id, backend_id="openclaw",
                                  output="ok", success=True, latency_ms=100))
-    assert logger.win_rates()["n8n"]["coding"] == 1.0
+    assert logger.win_rates()["openclaw"]["coding"] == 1.0
 
 def test_logger_win_rate_mixed(tmp_path):
     logger = TaskLogger(tmp_path / "test.db")
     for success in [True, True, False, False]:
         task = Task(prompt="x", category=TaskCategory.CODING)
-        logger.log_dispatch(task, RouteDecision(primary="autogpt", fallback_chain=[], rationale="t"))
-        logger.log_result(TaskResult(task_id=task.task_id, backend_id="autogpt",
+        logger.log_dispatch(task, RouteDecision(primary="zeroclaw", fallback_chain=[], rationale="t"))
+        logger.log_result(TaskResult(task_id=task.task_id, backend_id="zeroclaw",
                                      output="", success=success, latency_ms=50))
-    assert logger.win_rates()["autogpt"]["coding"] == 0.5
+    assert logger.win_rates()["zeroclaw"]["coding"] == 0.5
 
 def test_logger_feedback(tmp_path):
     logger = TaskLogger(tmp_path / "test.db")

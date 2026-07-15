@@ -13,8 +13,8 @@ Leader can route tasks to any of these popular AI & automation platforms. Simply
 | **AgentGPT** | Web-based autonomous goals | https://github.com/reworkd/AgentGPT |
 | **BabyAGI** | Lightweight autonomous agents | https://github.com/yoheinakajima/babyagi |
 | **Hermes Agent** | Self-improving agent with skill learning | https://github.com/NousResearch/hermes |
-| **ZeroClaw** | Minimal overhead Rust agent | https://github.com/zeroclaw/zeroclaw |
-| **NanoClaw** | Security-first with container isolation | https://github.com/nanoclaw/nanoclaw |
+| **ZeroClaw** | Minimal overhead Rust agent | https://github.com/zeroclaw-labs/zeroclaw |
+| **NanoClaw** | Security-first with container isolation | https://github.com/nanocoai/nanoclaw |
 | **Reworkd AI** | Goal-driven autonomous execution | https://github.com/reworkd/reworkd |
 
 ## Multi-Agent Orchestration (4)
