@@ -280,7 +280,7 @@ CATALOGUE: dict[str, BackendSpec] = {
         strengths=[TaskCategory.MULTIAGENT, TaskCategory.RESEARCH, TaskCategory.CREATIVE],
         weaknesses=[TaskCategory.MESSAGING],
         homepage="https://github.com/joaomdmoura/crewAI",
-        adapter_class="leader.adapters.generic_rest.GenericRestAdapter",
+        adapter_class="leader.adapters.crewai.CrewAIAdapter",
     ),
     "generic": BackendSpec(
         id="generic",

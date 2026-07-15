@@ -1,68 +1,58 @@
 """
-Leader – ZeroClaw adapter
+Leader – ZeroClaw native adapter
 """
 from __future__ import annotations
 import time
-import aiohttp
+import asyncio
+import shutil
 from ..models import Task, TaskResult
 from .base import BaseAdapter
 
-
 class ZeroClawAdapter(BaseAdapter):
-    """Adapter for ZeroClaw agent backend."""
+    """Adapter for ZeroClaw native backend."""
 
     def is_available(self) -> bool:
-        return bool(self.config.get("base_url") or self.config.get("binary"))
+        # Check if zeroclaw binary exists in PATH
+        return shutil.which("zeroclaw") is not None
 
     async def run(self, task: Task) -> TaskResult:
-        base_url = self.config.get("base_url")
-        if not base_url:
-            # Could implement local binary execution here
-            return TaskResult(
-                task_id=task.task_id,
-                backend_id="zeroclaw",
-                output="",
-                success=False,
-                latency_ms=0,
-                error="ZeroClaw binary execution not yet implemented",
-            )
-
-        base_url = base_url.rstrip("/")
-        endpoint = "/run"
-        url = f"{base_url}{endpoint}"
-
         t0 = time.monotonic()
         try:
-            headers = {"Content-Type": "application/json"}
-            if self.config.get("api_key"):
-                headers["Authorization"] = f"Bearer {self.config['api_key']}"
-
-            payload = {"prompt": task.prompt}
+            # Execute ZeroClaw natively via subprocess
+            proc = await asyncio.create_subprocess_exec(
+                "zeroclaw", "execute", "--input", task.prompt,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
             
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, headers=headers, json=payload,
-                                      timeout=aiohttp.ClientTimeout(total=120)) as resp:
-                    latency = (time.monotonic() - t0) * 1000
-                    if resp.status == 200:
-                        data = await resp.json()
-                        output = data.get("result", data.get("output", ""))
-                        return TaskResult(
-                            task_id=task.task_id,
-                            backend_id="zeroclaw",
-                            output=output,
-                            success=True,
-                            latency_ms=latency,
-                        )
-                    else:
-                        error_text = await resp.text()
-                        return TaskResult(
-                            task_id=task.task_id,
-                            backend_id="zeroclaw",
-                            output="",
-                            success=False,
-                            latency_ms=latency,
-                            error=f"HTTP {resp.status}: {error_text}",
-                        )
+            try:
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.communicate()
+                raise
+
+            latency = (time.monotonic() - t0) * 1000
+            
+            if proc.returncode == 0:
+                output = stdout.decode("utf-8").strip()
+                return TaskResult(
+                    task_id=task.task_id,
+                    backend_id="zeroclaw",
+                    output=output,
+                    success=True,
+                    latency_ms=latency,
+                )
+            else:
+                error_text = stderr.decode("utf-8").strip()
+                return TaskResult(
+                    task_id=task.task_id,
+                    backend_id="zeroclaw",
+                    output="",
+                    success=False,
+                    latency_ms=latency,
+                    error=f"Exit code {proc.returncode}: {error_text}",
+                )
         except Exception as exc:
             return TaskResult(
                 task_id=task.task_id,

@@ -11,6 +11,7 @@ from .autogpt import AutoGPTAdapter
 from .agentgpt import AgentGPTAdapter
 from .langchain import LangChainAdapter
 from .autogen import AutogenAdapter
+from .crewai import CrewAIAdapter
 from .taskweaver import TaskWeaverAdapter
 from .n8n import N8NAdapter
 from .make import MakeAdapter
@@ -61,4 +62,5 @@ __all__ = [
     "Mem0Adapter",
     "MLflowAdapter",
     "StabilityAIAdapter",
+    "CrewAIAdapter",
 ]
