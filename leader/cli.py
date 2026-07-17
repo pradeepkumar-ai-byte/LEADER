@@ -28,6 +28,7 @@ from .logger import TaskLogger
 from .router import Router
 from .executor import Executor
 from .auditor import AutonomousAuditor
+from .file_utils import latest_snapshot, restore_snapshot
 from . import config as cfg_module
 
 console = Console()
@@ -221,6 +222,24 @@ def cmd_review(args):
     auditor = AutonomousAuditor(registry, logger, executor)
     asyncio.run(auditor.audit_and_fix(target, max_issues=15))
 
+
+def cmd_restore(args):
+    target = getattr(args, "path", ".")
+    snapshot = getattr(args, "snapshot", None)
+
+    if snapshot:
+        restored = restore_snapshot(snapshot, root_path=target)
+        console.print(f"[green]✓ Restored {restored} files from snapshot {snapshot}[/]")
+        return
+
+    latest = latest_snapshot(target)
+    if latest is None:
+        console.print("[red]No snapshot found to restore.[/]")
+        return
+
+    restored = restore_snapshot(latest, root_path=target)
+    console.print(f"[green]✓ Restored {restored} files from latest snapshot {latest}[/]")
+
 def main():
     parser = argparse.ArgumentParser(
         prog="leader",
@@ -261,12 +280,18 @@ def main():
     p_review = sub.add_parser("review", help="Autonomous multi-agent code audit and auto-fix")
     p_review.add_argument("path", nargs="?", default=".", help="Directory to audit (default: ./)")
 
+    # restore
+    p_restore = sub.add_parser("restore", help="Restore files from the latest or specified snapshot")
+    p_restore.add_argument("path", nargs="?", default=".", help="Project root (default: ./)")
+    p_restore.add_argument("--snapshot", default=None, help="Snapshot directory to restore from")
+
     args = parser.parse_args()
     dispatch = {
         "run": cmd_run, "backends": cmd_backends, "ping": cmd_ping,
         "stats": cmd_stats, "feedback": cmd_feedback, "init": cmd_init,
         "serve": cmd_serve, "vscode-extension": cmd_vscode_extension,
         "review": cmd_review,
+        "restore": cmd_restore,
     }
     if args.command in dispatch:
         dispatch[args.command](args)

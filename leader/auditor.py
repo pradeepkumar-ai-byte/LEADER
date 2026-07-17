@@ -13,7 +13,7 @@ from .models import Task, TaskCategory, RouteDecision, TaskResult
 from .registry import Registry
 from .logger import TaskLogger
 from .executor import Executor
-from .file_utils import gather_codebase
+from .file_utils import gather_codebase, create_snapshot
 
 console = Console()
 
@@ -110,6 +110,12 @@ CODEBASE:
         remaining = len(unique_issues) - len(issues_to_fix)
         
         console.print(f"\n[bold yellow]Found {len(unique_issues)} unique issues. Auto-fixing {len(issues_to_fix)}...[/]")
+
+        snapshot_files = [root / issue["file"] for issue in issues_to_fix if (root / issue["file"]).exists()]
+        snapshot_dir = create_snapshot(root, snapshot_files) if snapshot_files else None
+        if snapshot_dir:
+            console.print(f"[dim]Snapshot saved at {snapshot_dir}[/]")
+            console.print("[dim]Use `leader restore --path <snapshot>` to roll back instantly.[/]")
         
         primary_backend = auditors[0]
         
