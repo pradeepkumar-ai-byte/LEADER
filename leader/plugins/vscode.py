@@ -19,13 +19,15 @@ This generates a ready-to-install VS Code extension that:
 - Forwards tasks to Leader's REST API server
 - Displays results in the VS Code output panel
 """
+
 from __future__ import annotations
+
 import json
 from pathlib import Path
 from typing import Any
 
-from .base import BasePlugin
 from ..sdk import Leader
+from .base import BasePlugin
 
 
 class VSCodePlugin(BasePlugin):
@@ -79,10 +81,10 @@ class VSCodePlugin(BasePlugin):
         self._write_readme(output_dir)
 
         print(f"✓ VS Code extension generated at {output_dir}")
-        print(f"  To install:")
-        print(f"    1. Start Leader server: leader serve")
-        print(f"    2. Open VS Code → Extensions → '...' → Install from VSIX")
-        print(f"    3. Or copy to ~/.vscode/extensions/leader-vscode/")
+        print("  To install:")
+        print("    1. Start Leader server: leader serve")
+        print("    2. Open VS Code → Extensions → '...' → Install from VSIX")
+        print("    3. Or copy to ~/.vscode/extensions/leader-vscode/")
 
     def _write_package_json(self, output_dir: Path):
         package = {
@@ -122,9 +124,7 @@ class VSCodePlugin(BasePlugin):
                 },
             },
         }
-        (output_dir / "package.json").write_text(
-            json.dumps(package, indent=2), encoding="utf-8"
-        )
+        (output_dir / "package.json").write_text(json.dumps(package, indent=2), encoding="utf-8")
 
     def _write_extension_js(self, output_dir: Path):
         js = """\

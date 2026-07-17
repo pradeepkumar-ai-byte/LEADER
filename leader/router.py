@@ -4,47 +4,146 @@ Leader – router
 Classifies an incoming task and dispatches it to the best connected backend.
 Uses evolved scoring (60% history, 40% static) once task data accumulates.
 """
+
 from __future__ import annotations
-import re
-from .models import Task, TaskCategory, RouteDecision
-from .registry import Registry, BackendSpec
+
 from .logger import TaskLogger
+from .models import RouteDecision, Task, TaskCategory
+from .registry import BackendSpec, Registry
 
 # ── improved keyword classifier ──────────────────────────────────────────────
 
 _HINTS: list[tuple[TaskCategory, list[str]]] = [
-    (TaskCategory.MESSAGING,  [
-        "send", "message", "whatsapp", "telegram", "slack", "discord",
-        "email", "notify", "notification", "dm", "text", "contact",
-    ]),
-    (TaskCategory.CODING,     [
-        "code", "function", "bug", "debug", "script", "implement",
-        "refactor", "test", "class", "module", "error", "exception",
-        "syntax", "python", "javascript", "typescript", "rust", "go",
-    ]),
-    (TaskCategory.RESEARCH,   [
-        "search", "find", "look up", "summarise", "summarize", "research",
-        "what is", "who is", "explain", "latest", "news", "current",
-        "recent", "when did", "where is", "how does",
-    ]),
-    (TaskCategory.CREATIVE,   [
-        "write", "draft", "story", "blog", "poem", "idea", "brainstorm",
-        "creative", "article", "post", "essay", "caption", "headline",
-    ]),
-    (TaskCategory.DATA,       [
-        "chart", "graph", "analyse", "analyze", "data", "csv",
-        "spreadsheet", "table", "statistics", "plot", "visualise",
-        "visualize", "dataset", "numbers",
-    ]),
-    (TaskCategory.AUTOMATION, [
-        "every", "schedule", "repeat", "automate", "pipeline",
-        "whenever", "trigger", "cron", "daily", "weekly", "hourly",
-        "run when", "on event",
-    ]),
-    (TaskCategory.MULTIAGENT, [
-        "team", "agents", "coordinate", "parallel", "assign",
-        "split", "crew", "multiple agents", "delegate",
-    ]),
+    (
+        TaskCategory.MESSAGING,
+        [
+            "send",
+            "message",
+            "whatsapp",
+            "telegram",
+            "slack",
+            "discord",
+            "email",
+            "notify",
+            "notification",
+            "dm",
+            "text",
+            "contact",
+        ],
+    ),
+    (
+        TaskCategory.CODING,
+        [
+            "code",
+            "function",
+            "bug",
+            "debug",
+            "script",
+            "implement",
+            "refactor",
+            "test",
+            "class",
+            "module",
+            "error",
+            "exception",
+            "syntax",
+            "python",
+            "javascript",
+            "typescript",
+            "rust",
+            "go",
+        ],
+    ),
+    (
+        TaskCategory.RESEARCH,
+        [
+            "search",
+            "find",
+            "look up",
+            "summarise",
+            "summarize",
+            "research",
+            "what is",
+            "who is",
+            "explain",
+            "latest",
+            "news",
+            "current",
+            "recent",
+            "when did",
+            "where is",
+            "how does",
+        ],
+    ),
+    (
+        TaskCategory.CREATIVE,
+        [
+            "write",
+            "draft",
+            "story",
+            "blog",
+            "poem",
+            "idea",
+            "brainstorm",
+            "creative",
+            "article",
+            "post",
+            "essay",
+            "caption",
+            "headline",
+        ],
+    ),
+    (
+        TaskCategory.DATA,
+        [
+            "chart",
+            "graph",
+            "analyse",
+            "analyze",
+            "data",
+            "csv",
+            "spreadsheet",
+            "table",
+            "statistics",
+            "plot",
+            "visualise",
+            "visualize",
+            "dataset",
+            "numbers",
+        ],
+    ),
+    (
+        TaskCategory.AUTOMATION,
+        [
+            "every",
+            "schedule",
+            "repeat",
+            "automate",
+            "pipeline",
+            "whenever",
+            "trigger",
+            "cron",
+            "daily",
+            "weekly",
+            "hourly",
+            "run when",
+            "on event",
+        ],
+    ),
+    (
+        TaskCategory.MULTIAGENT,
+        [
+            "team",
+            "agents",
+            "coordinate",
+            "parallel",
+            "assign",
+            "split",
+            "crew",
+            "multiple agents",
+            "delegate",
+        ],
+    ),
 ]
 
 
@@ -110,7 +209,7 @@ class Router:
             reverse=True,
         )
 
-        primary   = ranked[0]
+        primary = ranked[0]
         fallbacks = [s.id for s in ranked[1:]]
 
         missing = self.registry.missing_specialists(task.category)

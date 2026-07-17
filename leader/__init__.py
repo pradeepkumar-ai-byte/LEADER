@@ -15,11 +15,11 @@ Quick start (3 lines):
 __version__ = "0.1.0"
 __author__ = "Krish"
 
-from .models import Task, TaskCategory, TaskResult, RouteDecision
-from .registry import Registry, BackendSpec
-from .router import Router
 from .executor import Executor
 from .logger import TaskLogger
+from .models import RouteDecision, Task, TaskCategory, TaskResult
+from .registry import BackendSpec, Registry
+from .router import Router
 from .sdk import Leader
 
 __all__ = [

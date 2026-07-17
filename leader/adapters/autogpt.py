@@ -1,10 +1,13 @@
 """
 Leader – AutoGPT adapter
 """
+
 from __future__ import annotations
+
 import time
+
 import aiohttp
-import json
+
 from ..models import Task, TaskResult
 from .base import BaseAdapter
 
@@ -31,10 +34,11 @@ class AutoGPTAdapter(BaseAdapter):
                 "model": self.config.get("model", "gpt-4"),
                 "max_iterations": self.config.get("max_iterations", 5),
             }
-            
+
             async with aiohttp.ClientSession() as session:
-                async with session.post(url, headers=headers, json=payload,
-                                      timeout=aiohttp.ClientTimeout(total=300)) as resp:
+                async with session.post(
+                    url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=300)
+                ) as resp:
                     latency = (time.monotonic() - t0) * 1000
                     if resp.status == 200:
                         data = await resp.json()

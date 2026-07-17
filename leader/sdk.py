@@ -12,17 +12,18 @@ Or synchronously:
 
     result = leader.run_sync("summarize my emails")
 """
+
 from __future__ import annotations
+
 import asyncio
 from pathlib import Path
-from typing import Optional
 
-from .models import Task, TaskCategory, TaskResult, RouteDecision
-from .registry import Registry
-from .logger import TaskLogger
-from .router import Router
-from .executor import Executor
 from . import config as cfg_module
+from .executor import Executor
+from .logger import TaskLogger
+from .models import RouteDecision, Task, TaskCategory, TaskResult
+from .registry import Registry
+from .router import Router
 
 
 class Leader:
@@ -110,6 +111,7 @@ class Leader:
         if loop and loop.is_running():
             # We're inside an existing event loop — use a thread
             import concurrent.futures
+
             with concurrent.futures.ThreadPoolExecutor() as pool:
                 future = pool.submit(
                     asyncio.run,

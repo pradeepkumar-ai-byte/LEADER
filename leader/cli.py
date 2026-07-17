@@ -13,23 +13,26 @@ Usage:
   leader ping                      # health-check all connected backends
   leader vscode-extension           # generate VS Code extension
 """
+
 from __future__ import annotations
+
+import argparse
 import asyncio
 import sys
-import argparse
+
 import aiohttp
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
+from rich.table import Table
 
+from . import config as cfg_module
+from .auditor import AutonomousAuditor
+from .executor import Executor
+from .file_utils import latest_snapshot, restore_snapshot
+from .logger import TaskLogger
 from .models import Task, TaskCategory
 from .registry import Registry
-from .logger import TaskLogger
 from .router import Router
-from .executor import Executor
-from .auditor import AutonomousAuditor
-from .file_utils import latest_snapshot, restore_snapshot
-from . import config as cfg_module
 
 console = Console()
 
@@ -39,23 +42,24 @@ def build_context() -> tuple[Registry, TaskLogger, Router, Executor]:
     warnings = cfg_module.load(registry)
     for w in warnings:
         console.print(f"[yellow]⚠ Config warning:[/] {w}")
-    logger   = TaskLogger()
-    router   = Router(registry, logger)
+    logger = TaskLogger()
+    router = Router(registry, logger)
     executor = Executor(registry)
     return registry, logger, router, executor
 
 
 # ── commands ─────────────────────────────────────────────────────────────────
 
+
 def cmd_run(args):
-    prompt   = " ".join(args.prompt)
+    prompt = " ".join(args.prompt)
     category = TaskCategory(args.category) if args.category else None
     parallel = getattr(args, "parallel", False)
-    task     = Task(prompt=prompt, category=category)
+    task = Task(prompt=prompt, category=category)
 
     registry, logger, router, executor = build_context()
 
-    console.print(f"\n[bold cyan]Leader[/] routing task…")
+    console.print("\n[bold cyan]Leader[/] routing task…")
     decision = router.decide(task)
 
     console.print(f"  [dim]Category :[/] {task.category.value if task.category else 'unknown'}")
@@ -63,7 +67,7 @@ def cmd_run(args):
     if decision.fallback_chain:
         console.print(f"  [dim]Fallbacks:[/] {', '.join(decision.fallback_chain)}")
     if parallel and len(decision.fallback_chain) > 0:
-        console.print(f"  [dim]Mode     :[/] [magenta]parallel[/] (fastest result wins)")
+        console.print("  [dim]Mode     :[/] [magenta]parallel[/] (fastest result wins)")
     console.print(f"  [dim]Reason   :[/] {decision.rationale}\n")
 
     logger.log_dispatch(task, decision)
@@ -71,11 +75,13 @@ def cmd_run(args):
     logger.log_result(result)
 
     if result.success:
-        console.print(Panel(
-            result.output,
-            title=f"[green]Result from {result.backend_id}[/]",
-            expand=False,
-        ))
+        console.print(
+            Panel(
+                result.output,
+                title=f"[green]Result from {result.backend_id}[/]",
+                expand=False,
+            )
+        )
         cost_str = f"  ~${result.cost_estimate:.5f}" if result.cost_estimate else ""
         console.print(f"  [dim]Latency: {result.latency_ms:.0f}ms{cost_str}[/]\n")
     else:
@@ -90,9 +96,9 @@ def cmd_run(args):
 def cmd_backends(args):
     registry, *_ = build_context()
     table = Table(title="Leader – backends", show_lines=True)
-    table.add_column("ID",        style="cyan", no_wrap=True)
+    table.add_column("ID", style="cyan", no_wrap=True)
     table.add_column("Name")
-    table.add_column("Status",    justify="center")
+    table.add_column("Status", justify="center")
     table.add_column("Strengths")
     table.add_column("Notes", style="dim")
 
@@ -149,18 +155,19 @@ def cmd_stats(args):
         return
 
     table = Table(title="Leader – routing stats (evolved scores)", show_lines=True)
-    table.add_column("Backend",     style="cyan")
+    table.add_column("Backend", style="cyan")
     table.add_column("Category")
-    table.add_column("Win rate",    justify="right")
+    table.add_column("Win rate", justify="right")
     table.add_column("Avg latency", justify="right")
 
     for backend_id, categories in sorted(win_rates.items()):
         for cat, rate in sorted(categories.items()):
-            lat    = latencies.get(backend_id)
-            lat_s  = f"{lat:.0f}ms" if lat else "–"
+            lat = latencies.get(backend_id)
+            lat_s = f"{lat:.0f}ms" if lat else "–"
             colour = "green" if rate >= 0.7 else ("yellow" if rate >= 0.4 else "red")
             table.add_row(
-                backend_id, cat,
+                backend_id,
+                cat,
                 f"[{colour}]{rate*100:.0f}%[/]",
                 lat_s,
             )
@@ -186,35 +193,40 @@ def cmd_init(args):
 def cmd_serve(args):
     """Start the Leader REST API server."""
     from .server import run_server
+
     host = getattr(args, "host", "127.0.0.1")
     port = getattr(args, "port", 8585)
     config = getattr(args, "config", None)
 
-    console.print(Panel(
-        f"[bold cyan]Leader API Server[/]\n\n"
-        f"  Host: {host}\n"
-        f"  Port: {port}\n\n"
-        f"  Any tool can now call Leader over HTTP.\n"
-        f"  [dim]Ctrl+C to stop.[/]",
-        title="⚡ Starting Leader Server",
-        expand=False,
-    ))
+    console.print(
+        Panel(
+            f"[bold cyan]Leader API Server[/]\n\n"
+            f"  Host: {host}\n"
+            f"  Port: {port}\n\n"
+            f"  Any tool can now call Leader over HTTP.\n"
+            f"  [dim]Ctrl+C to stop.[/]",
+            title="⚡ Starting Leader Server",
+            expand=False,
+        )
+    )
     run_server(host=host, port=port, config_path=config)
 
 
 def cmd_vscode_extension(args):
     """Generate VS Code extension scaffold."""
     from .plugins.vscode import VSCodePlugin
+
     output = getattr(args, "output", "./leader-vscode")
     server_url = getattr(args, "server_url", "http://127.0.0.1:8585")
 
     plugin = VSCodePlugin(server_url=server_url)
     plugin.generate_extension(output)
     console.print(f"\n[green]✓ VS Code extension generated at {output}[/]")
-    console.print(f"  [dim]Make sure Leader server is running: leader serve[/]\n")
+    console.print("  [dim]Make sure Leader server is running: leader serve[/]\n")
 
 
 # ── entry point ───────────────────────────────────────────────────────────────
+
 
 def cmd_review(args):
     target = getattr(args, "path", ".")
@@ -240,6 +252,7 @@ def cmd_restore(args):
     restored = restore_snapshot(latest, root_path=target)
     console.print(f"[green]✓ Restored {restored} files from latest snapshot {latest}[/]")
 
+
 def main():
     parser = argparse.ArgumentParser(
         prog="leader",
@@ -251,8 +264,11 @@ def main():
     p_run = sub.add_parser("run", help="Run a task")
     p_run.add_argument("prompt", nargs="+")
     p_run.add_argument("--category", choices=[c.value for c in TaskCategory], default=None)
-    p_run.add_argument("--parallel", action="store_true",
-                       help="Run multiple backends simultaneously, use fastest success")
+    p_run.add_argument(
+        "--parallel",
+        action="store_true",
+        help="Run multiple backends simultaneously, use fastest success",
+    )
 
     # serve
     p_serve = sub.add_parser("serve", help="Start the Leader REST API server")
@@ -262,9 +278,9 @@ def main():
 
     # backends, ping, stats, init
     sub.add_parser("backends", help="List all known backends and connection status")
-    sub.add_parser("ping",     help="Health-check all connected backends")
-    sub.add_parser("stats",    help="Show routing history and evolved scores")
-    sub.add_parser("init",     help="Create ~/.leader/config.yaml")
+    sub.add_parser("ping", help="Health-check all connected backends")
+    sub.add_parser("stats", help="Show routing history and evolved scores")
+    sub.add_parser("init", help="Create ~/.leader/config.yaml")
 
     # feedback
     p_fb = sub.add_parser("feedback", help="Rate a result (helps router learn)")
@@ -281,15 +297,22 @@ def main():
     p_review.add_argument("path", nargs="?", default=".", help="Directory to audit (default: ./)")
 
     # restore
-    p_restore = sub.add_parser("restore", help="Restore files from the latest or specified snapshot")
+    p_restore = sub.add_parser(
+        "restore", help="Restore files from the latest or specified snapshot"
+    )
     p_restore.add_argument("path", nargs="?", default=".", help="Project root (default: ./)")
     p_restore.add_argument("--snapshot", default=None, help="Snapshot directory to restore from")
 
     args = parser.parse_args()
     dispatch = {
-        "run": cmd_run, "backends": cmd_backends, "ping": cmd_ping,
-        "stats": cmd_stats, "feedback": cmd_feedback, "init": cmd_init,
-        "serve": cmd_serve, "vscode-extension": cmd_vscode_extension,
+        "run": cmd_run,
+        "backends": cmd_backends,
+        "ping": cmd_ping,
+        "stats": cmd_stats,
+        "feedback": cmd_feedback,
+        "init": cmd_init,
+        "serve": cmd_serve,
+        "vscode-extension": cmd_vscode_extension,
         "review": cmd_review,
         "restore": cmd_restore,
     }
@@ -297,6 +320,7 @@ def main():
         dispatch[args.command](args)
     else:
         parser.print_help()
+
 
 if __name__ == "__main__":
     main()

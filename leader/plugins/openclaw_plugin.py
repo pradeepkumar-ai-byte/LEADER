@@ -18,12 +18,14 @@ Installation (inside an OpenClaw deployment):
 The plugin also exposes a simple HTTP endpoint so OpenClaw's
 skill system can call Leader via its standard REST skill interface.
 """
+
 from __future__ import annotations
+
 from typing import Any
+
 from aiohttp import web
 
 from .base import BasePlugin
-from ..sdk import Leader
 
 
 class OpenClawPlugin(BasePlugin):
@@ -78,8 +80,14 @@ class OpenClawPlugin(BasePlugin):
                         "category": {
                             "type": "string",
                             "enum": [
-                                "messaging", "coding", "research", "creative",
-                                "data", "automation", "multiagent", "general",
+                                "messaging",
+                                "coding",
+                                "research",
+                                "creative",
+                                "data",
+                                "automation",
+                                "multiagent",
+                                "general",
                             ],
                             "description": "Optional task category",
                         },
@@ -110,33 +118,35 @@ class OpenClawPlugin(BasePlugin):
 
         prompt = body.get("prompt") or body.get("query") or body.get("input")
         if not prompt:
-            return web.json_response(
-                {"error": "Provide 'prompt', 'query', or 'input'"}, status=400
-            )
+            return web.json_response({"error": "Provide 'prompt', 'query', or 'input'"}, status=400)
 
         result_dict = await self.on_task(prompt, context=body)
 
         # Format response in OpenClaw's expected format
-        return web.json_response({
-            "result": result_dict["output"],
-            "output": result_dict["output"],
-            "success": result_dict["success"],
-            "metadata": {
-                "routed_by": "leader",
-                "backend_used": result_dict["backend_id"],
-                "latency_ms": result_dict["latency_ms"],
-                "task_id": result_dict["task_id"],
-            },
-        })
+        return web.json_response(
+            {
+                "result": result_dict["output"],
+                "output": result_dict["output"],
+                "success": result_dict["success"],
+                "metadata": {
+                    "routed_by": "leader",
+                    "backend_used": result_dict["backend_id"],
+                    "latency_ms": result_dict["latency_ms"],
+                    "task_id": result_dict["task_id"],
+                },
+            }
+        )
 
     async def _handle_health(self, request: web.Request) -> web.Response:
         """GET /leader/health"""
-        return web.json_response({
-            "plugin": "Leader for OpenClaw",
-            "status": "healthy",
-            "connected_backends": self.leader.connected_count,
-            "ready": self.leader.is_ready,
-        })
+        return web.json_response(
+            {
+                "plugin": "Leader for OpenClaw",
+                "status": "healthy",
+                "connected_backends": self.leader.connected_count,
+                "ready": self.leader.is_ready,
+            }
+        )
 
     async def _handle_backends(self, request: web.Request) -> web.Response:
         """GET /leader/backends"""

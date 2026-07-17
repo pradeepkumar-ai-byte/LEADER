@@ -8,13 +8,16 @@ Runs tasks with:
 - automatic fallback chain on failure
 - smart retries with exponential backoff (transient errors only)
 """
+
 from __future__ import annotations
+
 import asyncio
 import importlib
 import time
-from .models import Task, TaskCategory, TaskResult, RouteDecision
-from .registry import Registry
+
 from .adapters.base import BaseAdapter
+from .models import RouteDecision, Task, TaskCategory, TaskResult
+from .registry import Registry
 
 DEFAULT_TIMEOUT = 120  # seconds
 MAX_RETRIES = 3
@@ -26,19 +29,21 @@ BACKOFF_BASE = 1.0  # seconds
 # programming bug or a permanent configuration error and must fail immediately.
 _RETRYABLE_EXCEPTIONS = (
     asyncio.TimeoutError,
-    ConnectionError,       # includes ConnectionRefused, ConnectionReset
-    OSError,               # covers socket.error, BrokenPipeError, etc.
-    TimeoutError,          # stdlib TimeoutError (parent of asyncio.TimeoutError)
+    ConnectionError,  # includes ConnectionRefused, ConnectionReset
+    OSError,  # covers socket.error, BrokenPipeError, etc.
+    TimeoutError,  # stdlib TimeoutError (parent of asyncio.TimeoutError)
 )
 
 # ── Side-effect guard ─────────────────────────────────────────────────────────
 # Tasks in these categories trigger real-world actions (send a Slack message,
 # fire a Zapier webhook, schedule a cron job).  Retrying them risks duplicate
 # delivery, so the executor always fails fast on the first error.
-_NO_RETRY_CATEGORIES = frozenset({
-    TaskCategory.MESSAGING,
-    TaskCategory.AUTOMATION,
-})
+_NO_RETRY_CATEGORIES = frozenset(
+    {
+        TaskCategory.MESSAGING,
+        TaskCategory.AUTOMATION,
+    }
+)
 
 
 def _is_retryable(exc: BaseException, task: Task) -> bool:
@@ -62,18 +67,22 @@ def _load_adapter(backend_id: str, registry: Registry) -> BaseAdapter | None:
 
 
 class Executor:
-    def __init__(self, registry: Registry, timeout: int = DEFAULT_TIMEOUT,
-                 max_retries: int = MAX_RETRIES):
-        self.registry    = registry
-        self.timeout     = timeout
+    def __init__(
+        self, registry: Registry, timeout: int = DEFAULT_TIMEOUT, max_retries: int = MAX_RETRIES
+    ):
+        self.registry = registry
+        self.timeout = timeout
         self.max_retries = max_retries
 
     async def _run_one(self, backend_id: str, task: Task) -> TaskResult:
         adapter = _load_adapter(backend_id, self.registry)
         if adapter is None or not adapter.is_available():
             return TaskResult(
-                task_id=task.task_id, backend_id=backend_id,
-                output="", success=False, latency_ms=0,
+                task_id=task.task_id,
+                backend_id=backend_id,
+                output="",
+                success=False,
+                latency_ms=0,
                 error=f"Backend '{backend_id}' not available or misconfigured.",
             )
 
@@ -84,28 +93,36 @@ class Executor:
                 return await asyncio.wait_for(adapter.run(task), timeout=self.timeout)
             except Exception as exc:
                 latency = (time.monotonic() - t0) * 1000
-                last_err = (f"Timed out after {self.timeout}s"
-                            if isinstance(exc, asyncio.TimeoutError)
-                            else str(exc))
+                last_err = (
+                    f"Timed out after {self.timeout}s"
+                    if isinstance(exc, asyncio.TimeoutError)
+                    else str(exc)
+                )
 
                 # ── Fail fast on non-retryable errors ────────────────────
                 if not _is_retryable(exc, task):
                     return TaskResult(
-                        task_id=task.task_id, backend_id=backend_id,
-                        output="", success=False, latency_ms=latency,
+                        task_id=task.task_id,
+                        backend_id=backend_id,
+                        output="",
+                        success=False,
+                        latency_ms=latency,
                         error=last_err,
                     )
 
                 # ── Last attempt exhausted ───────────────────────────────
                 if attempt == self.max_retries - 1:
                     return TaskResult(
-                        task_id=task.task_id, backend_id=backend_id,
-                        output="", success=False, latency_ms=latency,
+                        task_id=task.task_id,
+                        backend_id=backend_id,
+                        output="",
+                        success=False,
+                        latency_ms=latency,
                         error=f"All {self.max_retries} attempts failed. Last error: {last_err}",
                     )
 
                 # ── Exponential back-off before next retry ───────────────
-                sleep_time = BACKOFF_BASE * (1.5 ** attempt)
+                sleep_time = BACKOFF_BASE * (1.5**attempt)
                 print(
                     f"  [leader] {backend_id}: attempt {attempt + 1}/{self.max_retries} "
                     f"failed ({last_err}). Retrying in {sleep_time:.1f}s…"
@@ -114,13 +131,15 @@ class Executor:
 
         # Unreachable in practice, but satisfies type-checkers.
         return TaskResult(  # pragma: no cover
-            task_id=task.task_id, backend_id=backend_id,
-            output="", success=False, latency_ms=0, error=last_err,
+            task_id=task.task_id,
+            backend_id=backend_id,
+            output="",
+            success=False,
+            latency_ms=0,
+            error=last_err,
         )
 
-
-    async def run(self, task: Task, decision: RouteDecision,
-                  parallel: bool = False) -> TaskResult:
+    async def run(self, task: Task, decision: RouteDecision, parallel: bool = False) -> TaskResult:
         """
         parallel=False (default): try primary, then fallbacks in order.
         parallel=True:            run primary + all fallbacks simultaneously,
@@ -128,8 +147,11 @@ class Executor:
         """
         if decision.primary == "none":
             return TaskResult(
-                task_id=task.task_id, backend_id="none",
-                output="", success=False, latency_ms=0,
+                task_id=task.task_id,
+                backend_id="none",
+                output="",
+                success=False,
+                latency_ms=0,
                 error="No backends connected. Run `leader init` to get started.",
             )
 
@@ -148,8 +170,11 @@ class Executor:
                 return result
             print(f"  [leader] {backend_id} failed ({result.error}) — trying fallback…")
         return last_result or TaskResult(
-            task_id=task.task_id, backend_id="none",
-            output="", success=False, latency_ms=0,
+            task_id=task.task_id,
+            backend_id="none",
+            output="",
+            success=False,
+            latency_ms=0,
             error="All backends failed.",
         )
 
@@ -182,7 +207,15 @@ class Executor:
 
         # all failed — collect last results
         results = [t.result() for t in loop_tasks if not t.cancelled()]
-        return results[-1] if results else TaskResult(
-            task_id=task.task_id, backend_id="none",
-            output="", success=False, latency_ms=0, error="All backends failed."
+        return (
+            results[-1]
+            if results
+            else TaskResult(
+                task_id=task.task_id,
+                backend_id="none",
+                output="",
+                success=False,
+                latency_ms=0,
+                error="All backends failed.",
+            )
         )

@@ -1,12 +1,16 @@
 """
 Leader – ZeroClaw native adapter
 """
+
 from __future__ import annotations
-import time
+
 import asyncio
 import shutil
+import time
+
 from ..models import Task, TaskResult
 from .base import BaseAdapter
+
 
 class ZeroClawAdapter(BaseAdapter):
     """Adapter for ZeroClaw native backend."""
@@ -20,11 +24,14 @@ class ZeroClawAdapter(BaseAdapter):
         try:
             # Execute ZeroClaw natively via subprocess
             proc = await asyncio.create_subprocess_exec(
-                "zeroclaw", "execute", "--input", task.prompt,
+                "zeroclaw",
+                "execute",
+                "--input",
+                task.prompt,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.PIPE,
             )
-            
+
             try:
                 stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
             except asyncio.TimeoutError:
@@ -33,7 +40,7 @@ class ZeroClawAdapter(BaseAdapter):
                 raise
 
             latency = (time.monotonic() - t0) * 1000
-            
+
             if proc.returncode == 0:
                 output = stdout.decode("utf-8").strip()
                 return TaskResult(

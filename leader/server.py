@@ -17,13 +17,15 @@ Endpoints:
     GET  /api/health       — Health check
     POST /api/route        — Route only (no execution)
 """
+
 from __future__ import annotations
+
 import json
 import time
+
 from aiohttp import web
 
 from .sdk import Leader
-from .models import TaskCategory
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8585
@@ -78,21 +80,23 @@ def create_app(config_path: str | None = None) -> web.Application:
 
 async def handle_root(request: web.Request) -> web.Response:
     leader: Leader = request.app["leader"]
-    return _json_response({
-        "name": "Leader API",
-        "version": "0.1.0",
-        "description": "Credential-aware multi-backend AI agent router",
-        "connected_backends": leader.connected_count,
-        "ready": leader.is_ready,
-        "endpoints": {
-            "POST /api/run": "Route and execute a task",
-            "POST /api/route": "Route only (no execution)",
-            "GET /api/backends": "List all backends and status",
-            "GET /api/stats": "Routing performance stats",
-            "POST /api/feedback": "Submit user feedback",
-            "GET /api/health": "Health check",
-        },
-    })
+    return _json_response(
+        {
+            "name": "Leader API",
+            "version": "0.1.0",
+            "description": "Credential-aware multi-backend AI agent router",
+            "connected_backends": leader.connected_count,
+            "ready": leader.is_ready,
+            "endpoints": {
+                "POST /api/run": "Route and execute a task",
+                "POST /api/route": "Route only (no execution)",
+                "GET /api/backends": "List all backends and status",
+                "GET /api/stats": "Routing performance stats",
+                "POST /api/feedback": "Submit user feedback",
+                "GET /api/health": "Health check",
+            },
+        }
+    )
 
 
 async def handle_run(request: web.Request) -> web.Response:
@@ -122,15 +126,17 @@ async def handle_run(request: web.Request) -> web.Response:
         timeout=timeout,
     )
 
-    return _json_response({
-        "task_id": result.task_id,
-        "backend_id": result.backend_id,
-        "output": result.output,
-        "success": result.success,
-        "latency_ms": result.latency_ms,
-        "cost_estimate": result.cost_estimate,
-        "error": result.error or None,
-    })
+    return _json_response(
+        {
+            "task_id": result.task_id,
+            "backend_id": result.backend_id,
+            "output": result.output,
+            "success": result.success,
+            "latency_ms": result.latency_ms,
+            "cost_estimate": result.cost_estimate,
+            "error": result.error or None,
+        }
+    )
 
 
 async def handle_route(request: web.Request) -> web.Response:
@@ -152,12 +158,14 @@ async def handle_route(request: web.Request) -> web.Response:
 
     decision = leader.route(prompt=prompt, category=body.get("category"))
 
-    return _json_response({
-        "primary": decision.primary,
-        "fallback_chain": decision.fallback_chain,
-        "rationale": decision.rationale,
-        "recommendation": decision.recommendation,
-    })
+    return _json_response(
+        {
+            "primary": decision.primary,
+            "fallback_chain": decision.fallback_chain,
+            "rationale": decision.rationale,
+            "recommendation": decision.recommendation,
+        }
+    )
 
 
 async def handle_backends(request: web.Request) -> web.Response:
@@ -201,12 +209,14 @@ async def handle_feedback(request: web.Request) -> web.Response:
 async def handle_health(request: web.Request) -> web.Response:
     """GET /api/health — health check."""
     leader: Leader = request.app["leader"]
-    return _json_response({
-        "status": "healthy",
-        "ready": leader.is_ready,
-        "connected_backends": leader.connected_count,
-        "timestamp": time.time(),
-    })
+    return _json_response(
+        {
+            "status": "healthy",
+            "ready": leader.is_ready,
+            "connected_backends": leader.connected_count,
+            "timestamp": time.time(),
+        }
+    )
 
 
 # ── entry point ──────────────────────────────────────────────────────────────
@@ -217,7 +227,7 @@ def run_server(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, config_path: 
     app = create_app(config_path=config_path)
 
     print(f"\n  ⚡ Leader API server starting on http://{host}:{port}")
-    print(f"  📡 Endpoints:")
+    print("  📡 Endpoints:")
     print(f"     POST http://{host}:{port}/api/run")
     print(f"     POST http://{host}:{port}/api/route")
     print(f"     GET  http://{host}:{port}/api/backends")

@@ -4,13 +4,13 @@ Leader – Integration & CLI smoke tests.
 Tests the full command line interface (CLI) commands using pytest
 with mocked network calls.
 """
+
 from __future__ import annotations
-import sys
+
+import contextlib
 import io
-import os
-import tempfile
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+import sys
+from unittest.mock import patch
 
 import pytest
 from rich.console import Console
@@ -18,8 +18,6 @@ from rich.console import Console
 from leader.cli import main
 from leader.models import TaskResult
 
-
-import contextlib
 
 # Helper to run CLI main with custom arguments and capture Rich Console and stdout output
 def run_cli(args: list[str]) -> tuple[int, str]:
@@ -29,13 +27,15 @@ def run_cli(args: list[str]) -> tuple[int, str]:
     test_console = Console(file=captured_buffer, color_system=None, force_terminal=False, width=100)
 
     # Patch sys.argv, the cli console, sys.exit, and redirect stdout
-    with patch("sys.argv", ["leader"] + args), \
-         patch("leader.cli.console", test_console), \
-         contextlib.redirect_stdout(captured_buffer), \
-         patch("sys.exit") as mock_exit:
-        
+    with (
+        patch("sys.argv", ["leader"] + args),
+        patch("leader.cli.console", test_console),
+        contextlib.redirect_stdout(captured_buffer),
+        patch("sys.exit") as mock_exit,
+    ):
+
         main()
-        
+
         exit_code = 0
         if mock_exit.called:
             # sys.exit was called; extract exit code
@@ -45,23 +45,25 @@ def run_cli(args: list[str]) -> tuple[int, str]:
     return exit_code, captured_buffer.getvalue()
 
 
-
 @pytest.fixture
 def temp_home(tmp_path):
     """Fixture to mock user's home directory so leader doesn't overwrite real configs."""
     mock_home = tmp_path / "home"
     mock_home.mkdir()
-    
+
     # Create the config directory inside mock_home as well
     (mock_home / ".leader").mkdir(parents=True, exist_ok=True)
-    
-    with patch("pathlib.Path.home", return_value=mock_home), \
-         patch("leader.config.CONFIG_PATH", mock_home / ".leader" / "config.yaml"), \
-         patch("leader.logger.DEFAULT_DB", mock_home / ".leader" / "history.db"):
+
+    with (
+        patch("pathlib.Path.home", return_value=mock_home),
+        patch("leader.config.CONFIG_PATH", mock_home / ".leader" / "config.yaml"),
+        patch("leader.logger.DEFAULT_DB", mock_home / ".leader" / "history.db"),
+    ):
         yield mock_home
 
 
 # ── CLI Tests ────────────────────────────────────────────────────────────────
+
 
 def test_cli_help():
     # Help command should exit cleanly
@@ -73,7 +75,7 @@ def test_cli_help():
 
 def test_cli_init(temp_home):
     config_file = temp_home / ".leader" / "config.yaml"
-    
+
     # Remove it if already created by fixture or previous setups
     if config_file.exists():
         config_file.unlink()
@@ -102,7 +104,7 @@ def test_cli_backends_configured(temp_home):
     # Scaffold config
     run_cli(["init"])
     config_file = temp_home / ".leader" / "config.yaml"
-    
+
     # Configure direct_llm and openclaw
     config_content = """
 backends:
@@ -132,12 +134,15 @@ def test_cli_run_direct_llm(mock_run, temp_home):
     # Configure direct_llm fallback
     run_cli(["init"])
     config_file = temp_home / ".leader" / "config.yaml"
-    config_file.write_text("""
+    config_file.write_text(
+        """
 backends:
   direct_llm:
     provider: anthropic
     api_key: sk-ant-testkey
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
 
     # Mock success run result using side_effect to match task_id
     def run_side_effect(task):
@@ -147,8 +152,9 @@ backends:
             output="Mocked LLM Response",
             success=True,
             latency_ms=150.0,
-            cost_estimate=0.0001
+            cost_estimate=0.0001,
         )
+
     mock_run.side_effect = run_side_effect
 
     code, output = run_cli(["run", "write a short poem about a cat"])
@@ -169,12 +175,15 @@ def test_cli_stats_populated(mock_run, temp_home):
     # Populate config
     run_cli(["init"])
     config_file = temp_home / ".leader" / "config.yaml"
-    config_file.write_text("""
+    config_file.write_text(
+        """
 backends:
   direct_llm:
     provider: anthropic
     api_key: sk-ant-testkey
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
 
     # Mock success run result using side_effect to match task_id
     def run_side_effect(task):
@@ -185,18 +194,18 @@ backends:
             success=True,
             latency_ms=100.0,
         )
+
     mock_run.side_effect = run_side_effect
 
     # Run a task to write log history
     run_cli(["run", "summarize code"])
-    
+
     # Run stats
     code, output = run_cli(["stats"])
     assert code == 0
     assert "stats" in output.lower()
     assert "direct_llm" in output
     assert "100%" in output  # win rate
-
 
 
 def test_cli_feedback(temp_home):

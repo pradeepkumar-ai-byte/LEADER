@@ -27,13 +27,16 @@ Webhook payload format:
         "callback_url": "https://..."  // optional — Leader POSTs result here
     }
 """
+
 from __future__ import annotations
-import aiohttp
+
 from typing import Any
+
+import aiohttp
 from aiohttp import web
 
-from .base import BasePlugin
 from ..sdk import Leader
+from .base import BasePlugin
 
 
 class WebhookPlugin(BasePlugin):
@@ -132,10 +135,14 @@ class WebhookPlugin(BasePlugin):
 
         # Fire-and-forget: start the task in the background
         import asyncio
+
         asyncio.create_task(self._run_and_callback(prompt, body, callback_url))
 
         return web.json_response(
-            {"status": "accepted", "message": "Task started, result will be POSTed to callback_url"},
+            {
+                "status": "accepted",
+                "message": "Task started, result will be POSTed to callback_url",
+            },
             status=202,
         )
 
@@ -155,9 +162,11 @@ class WebhookPlugin(BasePlugin):
 
     async def _handle_health(self, request: web.Request) -> web.Response:
         """GET /webhook/leader/health"""
-        return web.json_response({
-            "plugin": "Leader Webhook",
-            "status": "healthy",
-            "connected_backends": self.leader.connected_count,
-            "ready": self.leader.is_ready,
-        })
+        return web.json_response(
+            {
+                "plugin": "Leader Webhook",
+                "status": "healthy",
+                "connected_backends": self.leader.connected_count,
+                "ready": self.leader.is_ready,
+            }
+        )

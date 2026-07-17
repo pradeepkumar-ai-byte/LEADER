@@ -22,10 +22,13 @@ Usage:
 
     web.run_app(app)
 """
+
 from __future__ import annotations
+
 from aiohttp import web
-from .sdk import Leader
+
 from . import server as leader_server
+from .sdk import Leader
 
 
 def mount_leader(

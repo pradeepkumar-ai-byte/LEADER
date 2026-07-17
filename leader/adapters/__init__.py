@@ -1,36 +1,37 @@
 """
 Leader – adapter plugins for various agent backends
 """
-from .base import BaseAdapter
-from .direct_llm import DirectLLMAdapter
-from .openclaw import OpenClawAdapter
-from .hermes import HermesAdapter
-from .zeroclaw import ZeroClawAdapter
-from .generic_rest import GenericRestAdapter
-from .autogpt import AutoGPTAdapter
+
 from .agentgpt import AgentGPTAdapter
-from .langchain import LangChainAdapter
 from .autogen import AutogenAdapter
-from .crewai import CrewAIAdapter
-from .taskweaver import TaskWeaverAdapter
-from .n8n import N8NAdapter
-from .make import MakeAdapter
-from .zapier import ZapierAdapter
-from .babyagi import BabyAGIAdapter
-from .metagpt import MetaGPTAdapter
-from .griptape import GriptapeAdapter
-from .reworkdai import ReworkdAIAdapter
-from .replicate import ReplicateAdapter
-from .huggingface import HuggingFaceAdapter
-from .litellm import LiteLLMAdapter
-from .vertexai import VertexAIAdapter
+from .autogpt import AutoGPTAdapter
 from .azureopenai import AzureOpenAIAdapter
-from .llamaindex import LlamaIndexAdapter
+from .babyagi import BabyAGIAdapter
+from .base import BaseAdapter
 from .bedrock import BedrockAdapter
-from .semantickernel import SemanticKernelAdapter
+from .crewai import CrewAIAdapter
+from .direct_llm import DirectLLMAdapter
+from .generic_rest import GenericRestAdapter
+from .griptape import GriptapeAdapter
+from .hermes import HermesAdapter
+from .huggingface import HuggingFaceAdapter
+from .langchain import LangChainAdapter
+from .litellm import LiteLLMAdapter
+from .llamaindex import LlamaIndexAdapter
+from .make import MakeAdapter
 from .mem0 import Mem0Adapter
+from .metagpt import MetaGPTAdapter
 from .mlflow import MLflowAdapter
+from .n8n import N8NAdapter
+from .openclaw import OpenClawAdapter
+from .replicate import ReplicateAdapter
+from .reworkdai import ReworkdAIAdapter
+from .semantickernel import SemanticKernelAdapter
 from .stabilityai import StabilityAIAdapter
+from .taskweaver import TaskWeaverAdapter
+from .vertexai import VertexAIAdapter
+from .zapier import ZapierAdapter
+from .zeroclaw import ZeroClawAdapter
 
 __all__ = [
     "BaseAdapter",

@@ -12,12 +12,14 @@ Lifecycle:
     4. Plugin routes through Leader and returns the result
     5. Host app displays the result in its own UI
 """
+
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from typing import Any
 
-from ..sdk import Leader
 from ..models import TaskResult
+from ..sdk import Leader
 
 
 class BasePlugin(ABC):

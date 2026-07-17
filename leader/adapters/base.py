@@ -1,8 +1,11 @@
 """
 Leader – base adapter interface for all backends
 """
+
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
+
 from ..models import Task, TaskResult
 
 

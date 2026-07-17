@@ -5,22 +5,26 @@ Supports environment variable fallback for API keys:
   ANTHROPIC_API_KEY, OPENAI_API_KEY, OPENROUTER_API_KEY
   LEADER_API_KEY_{BACKEND_ID}  (e.g. LEADER_API_KEY_OPENCLAW)
 """
+
 from __future__ import annotations
+
 import os
 import stat
 import sys
 from pathlib import Path
+
 import yaml
-from .registry import Registry, BackendSpec
+
 from .models import TaskCategory
+from .registry import BackendSpec, Registry
 
 CONFIG_PATH = Path.home() / ".leader" / "config.yaml"
 
 # ── environment variable mapping ─────────────────────────────────────────────
 
 _ENV_KEY_MAP: dict[str, list[str]] = {
-    "anthropic":  ["ANTHROPIC_API_KEY"],
-    "openai":     ["OPENAI_API_KEY"],
+    "anthropic": ["ANTHROPIC_API_KEY"],
+    "openai": ["OPENAI_API_KEY"],
     "openrouter": ["OPENROUTER_API_KEY"],
 }
 
@@ -61,7 +65,9 @@ def _validate_backend(backend_id: str, bconf: dict) -> list[str]:
     errors = []
     if backend_id == "direct_llm":
         if not bconf.get("provider"):
-            errors.append(f"[{backend_id}] 'provider' is required (anthropic | openai | openrouter)")
+            errors.append(
+                f"[{backend_id}] 'provider' is required (anthropic | openai | openrouter)"
+            )
         if not _resolve_api_key(backend_id, bconf):
             errors.append(
                 f"[{backend_id}] 'api_key' is required — set it in config or as an "
@@ -86,7 +92,6 @@ def load(registry: Registry, config_path: Path | None = None) -> list[str]:
 
     if not config_path.exists():
         return []
-
 
     with open(config_path) as f:
         cfg = yaml.safe_load(f) or {}

@@ -6,13 +6,14 @@ This is the memory the evolutionary router learns from over time.
 
 Schema versioning: uses SQLite PRAGMA user_version to track migrations.
 """
+
 from __future__ import annotations
+
 import sqlite3
-import json
 import time
 from pathlib import Path
-from .models import Task, TaskResult, RouteDecision, TaskCategory
 
+from .models import RouteDecision, Task, TaskResult
 
 DEFAULT_DB = Path.home() / ".leader" / "history.db"
 

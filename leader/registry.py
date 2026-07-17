@@ -1,9 +1,12 @@
 """
 Leader – capability registry
 """
+
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Optional
+
 from .models import TaskCategory
 
 
@@ -25,7 +28,12 @@ CATALOGUE: dict[str, BackendSpec] = {
         id="direct_llm",
         display_name="Direct LLM",
         description="Built-in adapter. Works with any API key (Anthropic, OpenAI, OpenRouter). No extra software needed. Leader's universal fallback.",
-        strengths=[TaskCategory.RESEARCH, TaskCategory.CREATIVE, TaskCategory.CODING, TaskCategory.GENERAL],
+        strengths=[
+            TaskCategory.RESEARCH,
+            TaskCategory.CREATIVE,
+            TaskCategory.CODING,
+            TaskCategory.GENERAL,
+        ],
         weaknesses=[TaskCategory.MESSAGING, TaskCategory.AUTOMATION],
         homepage="https://github.com/leader-agent/leader",
         adapter_class="leader.adapters.direct_llm.DirectLLMAdapter",
@@ -296,15 +304,13 @@ CATALOGUE: dict[str, BackendSpec] = {
 
 import copy
 
+
 class Registry:
     def __init__(self, extra: dict[str, BackendSpec] | None = None):
         # Deep copy CATALOGUE to prevent mutating the global template specs
-        self._specs: dict[str, BackendSpec] = {
-            k: copy.deepcopy(v) for k, v in CATALOGUE.items()
-        }
+        self._specs: dict[str, BackendSpec] = {k: copy.deepcopy(v) for k, v in CATALOGUE.items()}
         if extra:
             self._specs.update(extra)
-
 
     def register(self, spec: BackendSpec) -> None:
         self._specs[spec.id] = spec
@@ -330,18 +336,23 @@ class Registry:
 
     def best_for(self, category: TaskCategory, connected_only: bool = True) -> list[BackendSpec]:
         pool = self.connected() if connected_only else self.all()
+
         def score(spec: BackendSpec) -> int:
-            if category in spec.strengths:  return 2
-            if category in spec.weaknesses: return 0
+            if category in spec.strengths:
+                return 2
+            if category in spec.weaknesses:
+                return 0
             return 1
+
         return sorted(pool, key=score, reverse=True)
 
     def missing_specialists(self, category: TaskCategory) -> list[BackendSpec]:
         connected_ids = {s.id for s in self.connected()}
         return [
-            s for s in self._specs.values()
+            s
+            for s in self._specs.values()
             if s.id not in connected_ids
-            and s.id != "direct_llm"   # universal fallback, not a specialist
+            and s.id != "direct_llm"  # universal fallback, not a specialist
             and s.id != "generic"
             and category in s.strengths
         ]

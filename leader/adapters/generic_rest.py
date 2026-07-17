@@ -1,9 +1,13 @@
 """
 Leader – Generic REST adapter for any backend
 """
+
 from __future__ import annotations
+
 import time
+
 import aiohttp
+
 from ..models import Task, TaskResult
 from .base import BaseAdapter
 
@@ -43,8 +47,9 @@ class GenericRestAdapter(BaseAdapter):
             payload = {prompt_field: task.prompt}
 
             async with aiohttp.ClientSession() as session:
-                async with session.post(url, headers=headers, json=payload,
-                                      timeout=aiohttp.ClientTimeout(total=120)) as resp:
+                async with session.post(
+                    url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=120)
+                ) as resp:
                     latency = (time.monotonic() - t0) * 1000
                     if resp.status == 200:
                         data = await resp.json()
@@ -56,7 +61,7 @@ class GenericRestAdapter(BaseAdapter):
                             else:
                                 output = ""
                                 break
-                        
+
                         return TaskResult(
                             task_id=task.task_id,
                             backend_id=self.id,
