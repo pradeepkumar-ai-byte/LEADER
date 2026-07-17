@@ -4,7 +4,7 @@ Leader – type definitions
 
 from __future__ import annotations
 
-import time
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -28,11 +28,7 @@ class Task:
 
     prompt: str
     category: TaskCategory | None = None
-    task_id: str = field(default_factory=lambda: str(int(time.time() * 1000)))
-
-    def __post_init__(self):
-        if not self.task_id:
-            self.task_id = str(int(time.time() * 1000))
+    task_id: str = field(default_factory=lambda: uuid.uuid4().hex)
 
 
 @dataclass

@@ -1,0 +1,41 @@
+version: "3.8"
+
+services:
+  # n8n workflow engine (Specialist for AUTOMATION, MESSAGING, DATA)
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: leader-adapter-n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_SECURE_COOKIE=false
+    volumes:
+      - n8n_data:/home/node/.local/share/n8n
+    restart: unless-stopped
+
+  # AgentGPT (Specialist for GENERAL, AUTOMATION, RESEARCH)
+  agentgpt:
+    image: reworkd/agentgpt:latest
+    container_name: leader-adapter-agentgpt
+    ports:
+      - "3000:3000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    restart: unless-stopped
+
+  # LiteLLM Proxy (Helper to pool multiple LLM backends behind a single API)
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: leader-adapter-litellm
+    ports:
+      - "4000:4000"
+    command: [ "--config", "/app/config.yaml" ]
+    volumes:
+      - ./litellm-config.yaml:/app/config.yaml
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    restart: unless-stopped
+
+volumes:
+  n8n_data:

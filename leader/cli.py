@@ -33,6 +33,7 @@ from .logger import TaskLogger
 from .models import Task, TaskCategory
 from .registry import Registry
 from .router import Router
+from .setup_helper import show_all_backends, show_setup
 
 console = Console()
 
@@ -236,6 +237,14 @@ def cmd_review(args):
     asyncio.run(auditor.audit_and_fix(target, max_issues=15, auto_approve=auto_approve))
 
 
+def cmd_setup(args):
+    backend = getattr(args, "backend", None)
+    if backend:
+        show_setup(backend)
+    else:
+        show_all_backends()
+
+
 def cmd_restore(args):
     target = getattr(args, "path", ".")
     snapshot = getattr(args, "snapshot", None)
@@ -300,6 +309,12 @@ def main():
         "--auto-approve", action="store_true", help="Apply fixes without prompting for confirmation"
     )
 
+    # setup
+    p_setup = sub.add_parser("setup", help="Show installation instructions for a backend")
+    p_setup.add_argument(
+        "backend", nargs="?", default=None, help="Backend to set up (e.g. autogen, crewai)"
+    )
+
     # restore
     p_restore = sub.add_parser(
         "restore", help="Restore files from the latest or specified snapshot"
@@ -319,6 +334,7 @@ def main():
         "vscode-extension": cmd_vscode_extension,
         "review": cmd_review,
         "restore": cmd_restore,
+        "setup": cmd_setup,
     }
     if args.command in dispatch:
         dispatch[args.command](args)

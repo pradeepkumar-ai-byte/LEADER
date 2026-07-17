@@ -152,3 +152,17 @@ class TaskLogger:
             "SELECT backend_id, AVG(latency_ms) FROM results GROUP BY backend_id"
         )
         return {row[0]: row[1] for row in cur.fetchall()}
+
+    def feedback_scores(self) -> dict[str, float]:
+        """
+        Return feedback_scores[backend_id] = average_rating (1-5 scale, normalised to 0-1).
+        Joins feedback with dispatches to map ratings back to the backend that handled the task.
+        """
+        cur = self.conn.execute("""
+            SELECT d.backend_id, AVG(f.rating) as avg_rating
+            FROM feedback f
+            JOIN dispatches d ON f.task_id = d.task_id
+            GROUP BY d.backend_id
+        """)
+        # Normalise 1-5 rating to 0-1 range
+        return {row[0]: (row[1] - 1) / 4.0 for row in cur.fetchall()}

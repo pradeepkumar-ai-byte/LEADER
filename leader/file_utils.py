@@ -103,9 +103,15 @@ def restore_snapshot(snapshot_dir: str | Path, root_path: str | Path | None = No
     root = Path(root_path).resolve() if root_path is not None else Path(manifest["root"]).resolve()
 
     restored = 0
+    resolved_root = root.resolve()
     for relative in manifest.get("files", []):
         source = snapshot / relative
-        destination = root / relative
+        destination = (root / relative).resolve()
+        try:
+            destination.relative_to(resolved_root)
+        except ValueError:
+            # Skip files that attempt to escape the project root
+            continue
         if not source.exists():
             continue
         destination.parent.mkdir(parents=True, exist_ok=True)
