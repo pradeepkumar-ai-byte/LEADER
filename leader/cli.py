@@ -230,9 +230,10 @@ def cmd_vscode_extension(args):
 
 def cmd_review(args):
     target = getattr(args, "path", ".")
+    auto_approve = getattr(args, "auto_approve", False)
     registry, logger, _, executor = build_context()
     auditor = AutonomousAuditor(registry, logger, executor)
-    asyncio.run(auditor.audit_and_fix(target, max_issues=15))
+    asyncio.run(auditor.audit_and_fix(target, max_issues=15, auto_approve=auto_approve))
 
 
 def cmd_restore(args):
@@ -295,6 +296,9 @@ def main():
     # review
     p_review = sub.add_parser("review", help="Autonomous multi-agent code audit and auto-fix")
     p_review.add_argument("path", nargs="?", default=".", help="Directory to audit (default: ./)")
+    p_review.add_argument(
+        "--auto-approve", action="store_true", help="Apply fixes without prompting for confirmation"
+    )
 
     # restore
     p_restore = sub.add_parser(

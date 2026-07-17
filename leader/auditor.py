@@ -5,11 +5,14 @@ Leader - Autonomous Auditor and Auto-Fixer
 from __future__ import annotations
 
 import asyncio
+import difflib
 import json
 import re
 from pathlib import Path
 
 from rich.console import Console
+from rich.prompt import Confirm
+from rich.syntax import Syntax
 from rich.table import Table
 
 from .executor import Executor
@@ -27,7 +30,9 @@ class AutonomousAuditor:
         self.logger = logger
         self.executor = executor
 
-    async def audit_and_fix(self, target_path: str, max_issues: int = 15):
+    async def audit_and_fix(
+        self, target_path: str, max_issues: int = 15, auto_approve: bool = False
+    ):
         root = Path(target_path).resolve()
         console.print("\n[bold cyan]Leader Autonomous Auditor[/]")
         console.print(f"[dim]Gathering codebase from {root}...[/]")
@@ -174,6 +179,26 @@ OUTPUT ONLY THE NEW RAW FILE CONTENT. Do not wrap it in markdown code blocks.
                 new_code = fix_result.output
                 new_code = re.sub(r"^```[a-zA-Z]*\n", "", new_code)
                 new_code = re.sub(r"\n```$", "", new_code)
+
+                if new_code != original_code:
+                    if not auto_approve:
+                        diff = "\n".join(
+                            difflib.unified_diff(
+                                original_code.splitlines(),
+                                new_code.splitlines(),
+                                fromfile=file_path,
+                                tofile=file_path,
+                                lineterm="",
+                            )
+                        )
+                        console.print(f"\n[bold magenta]Proposed fix for {file_path}:[/]")
+                        syntax = Syntax(diff, "diff", theme="monokai", line_numbers=False)
+                        console.print(syntax)
+
+                        if not Confirm.ask("Apply this fix?"):
+                            console.print(f"[yellow]Skipped {file_path}[/]")
+                            fix_table.add_row(file_path, problem, "[yellow]Skipped[/]")
+                            continue
 
                 target_file.write_text(new_code, encoding="utf-8")
                 fix_table.add_row(file_path, problem, "[green]Fixed[/]")

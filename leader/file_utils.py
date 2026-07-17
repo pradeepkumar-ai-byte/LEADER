@@ -115,7 +115,7 @@ def restore_snapshot(snapshot_dir: str | Path, root_path: str | Path | None = No
     return restored
 
 
-def gather_codebase(root_path: str | Path, max_files: int = 100) -> str:
+def gather_codebase(root_path: str | Path, max_files: int = 1000, max_bytes: int = 500_000) -> str:
     """Reads a directory and returns a formatted string of the source files."""
     root = Path(root_path).resolve()
     if not root.is_dir():
@@ -123,6 +123,7 @@ def gather_codebase(root_path: str | Path, max_files: int = 100) -> str:
 
     code_text = []
     file_count = 0
+    total_bytes = 0
 
     for dirpath, dirnames, filenames in os.walk(root):
         # Filter ignored directories in place
@@ -139,20 +140,39 @@ def gather_codebase(root_path: str | Path, max_files: int = 100) -> str:
 
             # Skip files that are too large (e.g., > 100KB)
             try:
-                if path.stat().st_size > 100_000:
+                size = path.stat().st_size
+                if size > 100_000:
                     continue
             except OSError:
                 continue
 
             try:
                 content = path.read_text(encoding="utf-8")
+                # Pre-check context limits to avoid confusing the LLM with appended strings
+                content_bytes = len(content.encode("utf-8"))
+
                 # Format with standard code block wrapper
                 rel_path = path.relative_to(root)
                 code_text.append(f"--- {rel_path} ---\n{content}\n")
                 file_count += 1
+                total_bytes += content_bytes
+
+                if total_bytes >= max_bytes:
+                    print(
+                        f"\n\033[93m[WARNING] Codebase truncated! Reached max {max_bytes} bytes limit.\033[0m"
+                    )
+                    print(
+                        "\033[93mConsider running `leader review` on a specific subfolder (e.g., ./src) to avoid missing context.\033[0m\n"
+                    )
+                    return "\n".join(code_text)
 
                 if file_count >= max_files:
-                    code_text.append("\n[Warning: Codebase truncated to max files limit]")
+                    print(
+                        f"\n\033[93m[WARNING] Codebase truncated! Reached max {max_files} files limit.\033[0m"
+                    )
+                    print(
+                        "\033[93mConsider running `leader review` on a specific subfolder.\033[0m\n"
+                    )
                     return "\n".join(code_text)
 
             except UnicodeDecodeError:
