@@ -271,8 +271,6 @@ def test_logger_feedback(tmp_path):
 # the _load_adapter level to inject controlled failures and count invocations.
 
 
-
-
 def _make_mock_adapter(side_effects):
     """Create a mock adapter whose .run() yields *side_effects* in order."""
     adapter = MagicMock()

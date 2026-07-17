@@ -39,7 +39,7 @@ _SETUP_GUIDES: dict[str, dict] = {
         "config": (
             "Add to ~/.leader/config.yaml:\n"
             "  autogen:\n"
-            "    api_key: sk-proj-...  # OpenAI key for AutoGen agents\n"
+            "    api_key: your-openai-key  # OpenAI key for AutoGen agents\n"
             "    model: gpt-4"
         ),
     },
@@ -50,7 +50,7 @@ _SETUP_GUIDES: dict[str, dict] = {
         "config": (
             "Add to ~/.leader/config.yaml:\n"
             "  crewai:\n"
-            "    api_key: sk-proj-...  # OpenAI key used by CrewAI agents"
+            "    api_key: your-openai-key  # OpenAI key used by CrewAI agents"
         ),
     },
     "langchain": {

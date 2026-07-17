@@ -303,7 +303,6 @@ CATALOGUE: dict[str, BackendSpec] = {
 }
 
 
-
 class Registry:
     def __init__(self, extra: dict[str, BackendSpec] | None = None):
         # Deep copy CATALOGUE to prevent mutating the global template specs
