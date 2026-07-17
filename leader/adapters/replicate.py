@@ -22,7 +22,6 @@ class ReplicateAdapter(BaseAdapter):
                 "Authorization": f"Token {self.config['api_key']}",
                 "Content-Type": "application/json",
             }
-            model = self.config.get("model", "stability-ai/stable-diffusion")
             payload = {
                 "version": self.config.get("model_version", ""),
                 "input": {"prompt": task.prompt},

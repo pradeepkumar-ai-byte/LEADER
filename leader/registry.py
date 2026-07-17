@@ -4,6 +4,7 @@ Leader – capability registry
 
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -301,8 +302,6 @@ CATALOGUE: dict[str, BackendSpec] = {
     ),
 }
 
-
-import copy
 
 
 class Registry:

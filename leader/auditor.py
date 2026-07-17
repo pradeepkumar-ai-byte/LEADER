@@ -161,9 +161,8 @@ Here is the current code:
 ```
 {original_code}
 ```
-
-Rewrite the ENTIRE file to fix this problem. 
-DO NOT ADD ANY EXPLANATION. 
+Rewrite the ENTIRE file to fix this problem.
+DO NOT ADD ANY EXPLANATION.
 OUTPUT ONLY THE NEW RAW FILE CONTENT. Do not wrap it in markdown code blocks.
 """
 

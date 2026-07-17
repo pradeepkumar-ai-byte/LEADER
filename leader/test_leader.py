@@ -5,10 +5,11 @@ Leader – tests. Run: pytest tests/ -v
 import asyncio
 import copy
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from leader.executor import Executor
+from leader.executor import Executor, _is_retryable
 from leader.logger import TaskLogger
 from leader.models import RouteDecision, Task, TaskCategory, TaskResult
 from leader.registry import CATALOGUE, BackendSpec, Registry
@@ -269,9 +270,7 @@ def test_logger_feedback(tmp_path):
 # These tests exercise the executor's smart retry logic.  We mock adapters at
 # the _load_adapter level to inject controlled failures and count invocations.
 
-from unittest.mock import AsyncMock, MagicMock, patch
 
-from leader.executor import _is_retryable
 
 
 def _make_mock_adapter(side_effects):
