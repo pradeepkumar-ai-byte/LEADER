@@ -5,6 +5,21 @@ All notable changes to the **Leader** project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-07-19
+
+### Added
+- **Intelligent Codebase Review (`leader review`)**: Added autonomous codebase-wide code audit and auto-fix loop using connected specialist backends, executing concurrently across source files.
+- **Diff Preview Mode**: Interactive git-style Unified Diff preview with color syntax highlighting using `Rich` for reviewing proposed changes, requiring user confirmation before overwriting code (or skipping using `--auto-approve`).
+- **Snapshot Backup & Restore**: Auto-saves file snapshots prior to applying autonomous fixes, enabling instant rollbacks with `leader restore`.
+- **Semantic Router Classifier**: Completely overhauled the task classifier to use TF-IDF weighted bi-gram phrase scoring with negative weight suppressors, correctly routing complex coding prompts like "Write me a bug report".
+- **Path Traversal Safety**: Implemented resolved path sub-path containment checks in `restore_snapshot` to prevent directory traversal writing outside the project root.
+- **Uniqueness Guarantee**: Switched `task_id` generation to `uuid.uuid4` to eliminate collision potential during high-frequency parallel executions.
+- **Closed-Loop Feedback Routing**: Wired human feedback ratings (1-5 scale) directly into routing decisions, shifting the evolutionary router formula to a 50/30/20 history, static, and user-feedback blend.
+- **PyPI & CI Repair**: Fixed pyproject.toml packaging compatibility by removing the deprecated License classifier, updated GitHub Actions to run the full test suite (91 passing tests), and added an automated publish release workflow `.github/workflows/publish.yml`.
+- **Cost Tracking**: Fully wired model cost calculation from input/output tokens in direct_llm provider queries.
+- **Interactive Setup Helper**: Created `leader setup <backend>` with detailed guides for pip, binaries, and self-hosted instances.
+- **Docker Adapter Bridge**: Expanded `docker-compose.adapters.yml` with a Python-based FastAPI mock bridge container that instantly mocks all REST-based agent platforms to facilitate testing and local development.
+
 ## [0.1.0] - 2026-07-16
 
 This is the initial open-source release of Leader.

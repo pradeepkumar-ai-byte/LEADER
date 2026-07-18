@@ -1,6 +1,19 @@
 version: "3.8"
 
 services:
+  # Mock Agent Bridge (instantly mocks all REST adapters for testing & development)
+  # Exposes API endpoints for BabyAGI, TaskWeaver, AgentGPT, MetaGPT, Hermes, and Generic REST.
+  mock-bridge:
+    image: python:3.11-slim
+    container_name: leader-adapter-mock-bridge
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./bridges/agent_bridge.py:/app/agent_bridge.py
+    working_dir: /app
+    command: sh -c "pip install fastapi uvicorn && python agent_bridge.py"
+    restart: unless-stopped
+
   # n8n workflow engine (Specialist for AUTOMATION, MESSAGING, DATA)
   n8n:
     image: n8nio/n8n:latest
