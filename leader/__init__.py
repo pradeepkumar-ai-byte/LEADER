@@ -12,9 +12,20 @@ Quick start (3 lines):
     result = await leader.run("your task here")
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __author__ = "Krish"
 
+from .exceptions import (
+    AdapterLoadError,
+    BackendNotFoundError,
+    BackendUnavailableError,
+    ClassificationError,
+    ConfigurationError,
+    LeaderError,
+    NoBackendsConnectedError,
+    SnapshotError,
+    TaskExecutionError,
+)
 from .executor import Executor
 from .logger import TaskLogger
 from .models import RouteDecision, Task, TaskCategory, TaskResult
@@ -23,14 +34,27 @@ from .router import Router
 from .sdk import Leader
 
 __all__ = [
+    # SDK entry point
     "Leader",
+    # Core types
     "Task",
     "TaskCategory",
     "TaskResult",
     "RouteDecision",
+    # Infrastructure
     "Registry",
     "BackendSpec",
     "Router",
     "Executor",
     "TaskLogger",
+    # Exceptions
+    "LeaderError",
+    "ConfigurationError",
+    "BackendNotFoundError",
+    "BackendUnavailableError",
+    "NoBackendsConnectedError",
+    "AdapterLoadError",
+    "TaskExecutionError",
+    "ClassificationError",
+    "SnapshotError",
 ]

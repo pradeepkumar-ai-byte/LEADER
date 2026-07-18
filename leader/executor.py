@@ -13,11 +13,14 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import logging
 import time
 
 from .adapters.base import BaseAdapter
 from .models import RouteDecision, Task, TaskCategory, TaskResult
 from .registry import Registry
+
+logger = logging.getLogger("leader.executor")
 
 DEFAULT_TIMEOUT = 120  # seconds
 MAX_RETRIES = 3
@@ -62,7 +65,8 @@ def _load_adapter(backend_id: str, registry: Registry) -> BaseAdapter | None:
         module = importlib.import_module(module_path)
         cls = getattr(module, class_name)
         return cls(config={**spec.config, "id": backend_id})
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to load adapter %s: %s", backend_id, exc)
         return None
 
 
@@ -123,9 +127,13 @@ class Executor:
 
                 # ── Exponential back-off before next retry ───────────────
                 sleep_time = BACKOFF_BASE * (1.5**attempt)
-                print(
-                    f"  [leader] {backend_id}: attempt {attempt + 1}/{self.max_retries} "
-                    f"failed ({last_err}). Retrying in {sleep_time:.1f}s…"
+                logger.info(
+                    "%s: attempt %d/%d failed (%s). Retrying in %.1fs…",
+                    backend_id,
+                    attempt + 1,
+                    self.max_retries,
+                    last_err,
+                    sleep_time,
                 )
                 await asyncio.sleep(sleep_time)
 
@@ -168,7 +176,7 @@ class Executor:
             last_result = result
             if result.success:
                 return result
-            print(f"  [leader] {backend_id} failed ({result.error}) — trying fallback…")
+            logger.warning("%s failed (%s) — trying fallback…", backend_id, result.error)
         return last_result or TaskResult(
             task_id=task.task_id,
             backend_id="none",

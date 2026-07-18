@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "leader-agent"
-version = "0.1.0"
+version = "0.2.0"
 description = "A credential-aware router that evolves which specialist to dispatch each task to, sitting above OpenClaw, Hermes, ZeroClaw, or any REST-accessible agent backend."
 readme = "README.md"
 license = "MIT"

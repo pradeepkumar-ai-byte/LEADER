@@ -26,39 +26,68 @@ In modern AI engineering, developers rarely rely on a single model or agent fram
 * **LangChain** or **LlamaIndex** for RAG pipelines.
 * **Local Ollama** or **Direct APIs** (Anthropic, OpenAI) for raw model inference.
 
-**Leader** is a lightweight, credential-aware routing layer that sits above these frameworks. Instead of manually writing complex conditional logic to dispatch tasks, Leader dynamically classifies incoming prompts, filters backends by credential availability, routes to the best-performing service, and adapts based on latency and success history.
+**Leader** is a lightweight, credential-aware routing layer that sits above these frameworks. Instead of manually writing complex conditional logic to dispatch tasks, Leader dynamically classifies incoming prompts, filters backends by credential availability, routes to the best-performing service, and adapts based on latency, success history, and human feedback.
 
 ---
 
-## How It Works
-
-Leader operates as a clean dispatch pipeline:
+## Architecture
 
 ```
-                            User Prompt
-                                 │
-                                 ▼
-                    [ 1. Credential Filter ]
-        Checks active environment variables & YAML configs.
-        Only connected/online backends are permitted to run.
-                                 │
-                                 ▼
-                     [ 2. Evolved Scoring ]
-        Classifies task and scores active backends using:
-        Score = (0.4 * StaticWeight) + (0.6 * WinRate * 2) - LatencyPenalty
-                                 │
-                                 ▼
-                     [ 3. Dispatch & Retry ]
-        Executes primary backend. On failure, falls back 
-        to fallback chain. Logs latency, outcome, and feedback.
+                     ┌─────────────────────────────────────┐
+                     │            User Prompt              │
+                     └──────────────┬──────────────────────┘
+                                    │
+                                    ▼
+                     ┌──────────────────────────────────────┐
+                     │   1. Semantic Classifier (router.py) │
+                     │   TF-IDF weighted bi-gram phrases    │
+                     │   + keyword scoring + suppression    │
+                     │   → CODING | RESEARCH | CREATIVE ... │
+                     └──────────────┬───────────────────────┘
+                                    │
+                                    ▼
+                     ┌──────────────────────────────────────┐
+                     │   2. Evolved Scoring (router.py)     │
+                     │   Score = 0.3×Static + 0.5×WinRate   │
+                     │         + 0.2×Feedback − Latency     │
+                     └──────────────┬───────────────────────┘
+                                    │
+                                    ▼
+                     ┌──────────────────────────────────────┐
+                     │   3. Credential Filter (registry.py) │
+                     │   Only connected backends with valid │
+                     │   API keys / base_urls are eligible  │
+                     └──────────────┬───────────────────────┘
+                                    │
+                ┌───────────────────┼───────────────────────┐
+                ▼                   ▼                       ▼
+         ┌────────────┐    ┌──────────────┐        ┌────────────┐
+         │  Primary   │    │  Fallback 1  │  ...   │ Fallback N │
+         │  Backend   │    │  Backend     │        │  Backend   │
+         └─────┬──────┘    └──────────────┘        └────────────┘
+               │
+               ▼
+         ┌──────────────────────────────────────┐
+         │   4. TaskLogger (SQLite)             │
+         │   Records dispatch, result, feedback │
+         │   → feeds back into evolved scoring  │
+         └──────────────────────────────────────┘
 ```
 
 ### The Scoring Algorithm
-The routing decision is backed by a hybrid scoring formula:
-* **Static Weight (40%)**: Pre-configured affinity matrix mapping backends to task categories (e.g. n8n is highly weighted for `automation`, AutoGen for `multiagent`).
-* **Win Rate (60%)**: Lived success rate of the backend on your specific workload, calculated from logged executions.
-* **Latency Penalty**: Backends are penalized slightly based on average response time to prevent routing to slow agents when a faster, comparable alternative is available:
-  $$\text{Penalty} = \min\left(\frac{\text{Avg Latency (ms)}}{10000}, 0.5\right)$$
+
+The routing decision uses a hybrid formula that learns from your workload:
+
+| Component | Weight | Source |
+|-----------|--------|--------|
+| **Historical Win Rate** | 50% | Success/failure ratio from SQLite task log |
+| **Static Affinity** | 30% | Pre-configured strengths/weaknesses per backend |
+| **Human Feedback** | 20% | User ratings (1-5) normalised to 0-1 |
+| **Latency Penalty** | −0.5 max | `min(avg_latency_ms / 10000, 0.5)` |
+
+$$\text{Score} = 0.3 \times \text{Static} + 0.5 \times \text{WinRate} \times 2 + 0.2 \times \text{Feedback} \times 2 - \text{LatencyPenalty}$$
+
+> See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system design with Mermaid diagrams.
 
 ---
 
@@ -71,37 +100,34 @@ leader init        # Scaffolds configuration at ~/.leader/config.yaml
 ```
 
 ### 2. Configure Credentials
-Leader prioritizes security by resolving credentials from environment variables first, keeping API keys off your disk:
+Leader prioritizes security by resolving credentials from environment variables first:
 
 ```bash
-# Export LLM keys for direct fallback
 export ANTHROPIC_API_KEY="sk-ant-..."
 export OPENAI_API_KEY="sk-proj-..."
+```
 
-# Export host endpoints for your agent runtimes
-export LEADER_API_KEY_CREWAI="your-key-here"
+### 3. Run
+```bash
+leader run "Fix the authentication bug in login.py"
 ```
 
 ---
 
 ## Integration Scenarios
 
-Leader is designed to run embedded inside your host application rather than as a separate silo.
-
-### 1. Python SDK
-Initialize and execute in 3 lines:
+### 1. Python SDK (3 lines)
 ```python
 from leader import Leader
 
 leader = Leader()
 result = await leader.run("Run code review on commit 4f2a1")
 
-print(f"Dispatched to: {result.backend_id} | Success: {result.success}")
+print(f"Dispatched to: {result.backend_id} | Cost: ${result.cost_estimate:.4f}")
 print(result.output)
 ```
 
 ### 2. REST API Server
-Run Leader as a local daemon or microservice:
 ```bash
 leader serve --port 8585
 ```
@@ -111,25 +137,23 @@ curl -X POST http://localhost:8585/api/run \
   -d '{"prompt": "send slack notification to triage channel"}'
 ```
 
-### 3. Webhook Integration (n8n / Make / Zapier)
-Embed Leader as an automation node:
-```python
-from leader.plugins import WebhookPlugin
-
-plugin = WebhookPlugin()
-await plugin.install(app)  # Exposes HTTP POST /webhook/leader
+### 3. Autonomous Code Review
+```bash
+leader review ./src                # Interactive diff preview before each fix
+leader review ./src --auto-approve # Auto-apply all fixes (snapshot saved for rollback)
+leader restore ./src               # Instant rollback to pre-fix snapshot
 ```
 
-### 4. VS Code / Cursor Extension
-Generate a packaged editor extension linked to your local router:
+### 4. Backend Setup Helper
 ```bash
-leader vscode-extension --output ./leader-vscode
+leader setup autogen    # Step-by-step install + config instructions
+leader setup crewai     # Works for all 30+ adapters
 ```
 
 ### 5. Docker Deployment
-Deploy the API server with persistent volume logging:
 ```bash
-docker-compose up -d
+docker-compose up -d                                    # Leader API server
+docker-compose -f docker-compose.adapters.yml up -d     # Adapter backends
 ```
 
 ---
@@ -143,27 +167,42 @@ leader backends                  # List all 30+ backends and connection status
 leader ping                      # Health-check connected endpoints
 leader stats                     # Show routing win-rates and latencies
 leader feedback <task_id> <1-5>  # Submit manual score to update scoring weights
+leader review [path]             # Autonomous code audit with diff preview
+leader restore [path]            # Rollback to pre-review snapshot
+leader setup <backend>           # Show installation instructions for a backend
+leader serve                     # Start REST API server (default: port 8585)
+leader init                      # Create ~/.leader/config.yaml
+leader vscode-extension          # Generate VS Code / Cursor extension scaffold
 ```
 
 ---
 
 ## Supported Backends (30+)
 
-Leader ships with built-in adapters mapping tasks to standard platforms:
-
-* **Orchestration**: Microsoft AutoGen, CrewAI, MetaGPT, TaskWeaver
-* **LLMs**: Anthropic, OpenAI, OpenRouter, LiteLLM, AWS Bedrock, Google Vertex AI, HuggingFace, Replicate
-* **Frameworks**: LangChain, LlamaIndex, Semantic Kernel, Griptape
-* **No-Code**: n8n, Make (Integromat), Zapier
-* **Specialized**: Stability AI, Mem0, MLflow, OpenClaw, ZeroClaw
+| Category | Backends |
+|----------|----------|
+| **Orchestration** | Microsoft AutoGen, CrewAI, MetaGPT, TaskWeaver, BabyAGI |
+| **LLM Providers** | Anthropic, OpenAI, OpenRouter, LiteLLM, AWS Bedrock, Google Vertex AI, Azure OpenAI |
+| **Frameworks** | LangChain, LlamaIndex, Semantic Kernel, Griptape |
+| **No-Code** | n8n, Make (Integromat), Zapier |
+| **ML Platforms** | HuggingFace, Replicate, MLflow, Stability AI |
+| **Agents** | AutoGPT, AgentGPT, OpenClaw, ZeroClaw, Hermes, NanoClaw |
+| **Memory** | Mem0 |
 
 ---
 
-## Verification
+## Test Suite
 
-Leader includes a comprehensive test suite (42 unit and integration tests) verifying routing decisions, SQLite history logging, database migrations, and adapter execution.
+Leader ships with **95+ unit, integration, and HTTP integration tests** covering:
 
-To run tests:
+- Semantic classifier edge cases (35+ parametrised prompts)
+- Router evolved scoring with feedback loop
+- Executor retry logic with side-effect safety guards
+- File snapshot backup/restore with path traversal protection
+- Auditor deduplication and malformed JSON handling
+- Real HTTP integration tests against a live FastAPI mock bridge
+- CLI end-to-end tests
+
 ```bash
 pip install -e ".[dev]"
 pytest leader/ -v
@@ -173,9 +212,37 @@ pytest leader/ -v
 
 ## Security
 
-* **Config Isolation**: `leader init` automatically restricts config file permissions to `600` (owner read/write only) on Unix-based systems.
-* **Env-First Resolution**: API credentials are read from environment variables, preventing plain-text keys from being stored in configuration files.
-* **Log Sanitization**: Credentials and tokens are stripped from SQLite storage and CLI print statements.
+* **Config Isolation**: `leader init` restricts config file permissions to `600` (owner read/write only) on Unix.
+* **Env-First Resolution**: API credentials are read from environment variables, preventing plain-text keys in config files.
+* **Path Traversal Protection**: Snapshot restore validates all paths stay within the project root.
+* **Side-Effect Safety**: Tasks in MESSAGING/AUTOMATION categories never retry to prevent duplicate delivery.
+* **Structured Exception Hierarchy**: All errors use typed exceptions (`LeaderError`, `BackendNotFoundError`, etc.) for safe programmatic handling.
+
+---
+
+## Project Structure
+
+```
+leader/
+├── __init__.py              # Public API surface & version
+├── models.py                # Task, TaskResult, RouteDecision, TaskCategory
+├── exceptions.py            # Structured exception hierarchy
+├── router.py                # Semantic classifier + evolved scoring
+├── registry.py              # Backend catalogue (30+ specs) + Registry
+├── executor.py              # Dispatch, retry, fallback chain, parallel mode
+├── logger.py                # SQLite persistence + schema migrations
+├── config.py                # YAML config loader + env var resolution
+├── sdk.py                   # Leader class (SDK entry point)
+├── cli.py                   # CLI commands (argparse)
+├── server.py                # aiohttp REST API server
+├── middleware.py             # Drop-in aiohttp middleware
+├── auditor.py               # Autonomous code review engine
+├── file_utils.py            # Codebase gathering + snapshot backup/restore
+├── setup_helper.py          # Backend installation guides
+├── conftest.py              # Shared test fixtures
+├── adapters/                # 31 backend adapters (base.py + implementations)
+└── plugins/                 # OpenClaw skill + webhook plugins
+```
 
 ---
 

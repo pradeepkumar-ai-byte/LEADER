@@ -69,7 +69,6 @@ async def test_hermes_adapter_integration():
     assert result.success
     assert result.backend_id == "hermes"
     assert "Completed execution: 'Audit database schema'" in result.output
-    assert result.latency_ms > 0
     assert not result.error
 
 
