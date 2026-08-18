@@ -9,10 +9,10 @@ description = "A credential-aware router that evolves which specialist to dispat
 readme = "README.md"
 license = "MIT"
 authors = [
-    {name = "Krish", email = "pradeepkumar.ai.byte@gmail.com"},
+    {name = "Krish", email = "pradeepkumar.workai@gmail.com"},
 ]
 maintainers = [
-    {name = "Krish", email = "pradeepkumar.ai.byte@gmail.com"},
+    {name = "Krish", email = "pradeepkumar.workai@gmail.com"},
 ]
 keywords = ["agent", "routing", "llm", "backend", "orchestration", "multi-agent", "router", "ai", "plugin", "sdk"]
 classifiers = [

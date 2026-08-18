@@ -1,6 +1,6 @@
 FROM python:3.12-slim
 
-LABEL maintainer="Krish <pradeepkumar.ai.byte@gmail.com>"
+LABEL maintainer="Krish <pradeepkumar.workai@gmail.com>"
 LABEL description="Leader — credential-aware multi-backend AI agent router"
 
 WORKDIR /app
