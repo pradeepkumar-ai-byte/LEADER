@@ -53,8 +53,13 @@ jobs:
       - name: Check for hardcoded secrets
         run: |
           # Fail if any real API keys are committed
-          if grep -rn "sk-ant-\|sk-proj-\|sk-or-" leader/ --include="*.py" | grep -v "sk-test\|sk-ant-\.\.\.\|sk-proj-\.\.\.\|sk-or-\.\.\.\|sk-ant-YOUR\|sk-ant-test\|sk-proj-test\|sk-or-test"; then
-            echo "ERROR: Possible hardcoded API key found!"
-            exit 1
+          secrets=$(grep -rn "sk-ant-\|sk-proj-\|sk-or-" leader/ --include="*.py" || true)
+          if [ -n "$secrets" ]; then
+            filtered=$(echo "$secrets" | grep -v "sk-test\|sk-ant-\.\.\.\|sk-proj-\.\.\.\|sk-or-\.\.\.\|sk-ant-YOUR\|sk-ant-test\|sk-proj-test\|sk-or-test" || true)
+            if [ -n "$filtered" ]; then
+              echo "ERROR: Possible hardcoded API key found!"
+              echo "$filtered"
+              exit 1
+            fi
           fi
           echo "No hardcoded secrets found."
