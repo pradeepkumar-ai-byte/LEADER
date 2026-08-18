@@ -248,6 +248,6 @@ leader/
 
 ## License & Maintainer
 
-* **Created & maintained by Krish** (pradeepkumar.workai@gmail.com)
+* **Created & maintained by Pradeep Kumar (Krish)** (pradeepkumar.workai@gmail.com)
 * **GitHub**: [@pradeepkumar-ai-byte](https://github.com/pradeepkumar-ai-byte)
 * **License**: MIT (Open Source)

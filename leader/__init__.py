@@ -12,8 +12,8 @@ Quick start (3 lines):
     result = await leader.run("your task here")
 """
 
-__version__ = "0.2.0"
-__author__ = "Krish"
+__version__ = "0.2.1"
+__author__ = "Pradeep Kumar (Krish)"
 
 from .exceptions import (
     AdapterLoadError,
