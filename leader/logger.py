@@ -18,7 +18,7 @@ from .models import RouteDecision, Task, TaskResult
 DEFAULT_DB = Path.home() / ".leader" / "history.db"
 
 # Current schema version — bump this when adding migrations
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class TaskLogger:
@@ -47,9 +47,12 @@ class TaskLogger:
         if current < 1:
             self._migration_v1()
 
+        if current < 2:
+            self._migration_v2()
+
         # Future migrations go here:
-        # if current < 2:
-        #     self._migration_v2()
+        # if current < 3:
+        #     self._migration_v3()
 
         if current < SCHEMA_VERSION:
             self._set_version(SCHEMA_VERSION)
@@ -84,14 +87,42 @@ class TaskLogger:
         """)
         self.conn.commit()
 
-    # ── Example future migration ─────────────────────────────────────────────
-    # def _migration_v2(self):
-    #     """Add model_used column to results."""
-    #     try:
-    #         self.conn.execute("ALTER TABLE results ADD COLUMN model_used TEXT DEFAULT ''")
-    #         self.conn.commit()
-    #     except sqlite3.OperationalError:
-    #         pass  # Column already exists (idempotent)
+    def _migration_v2(self):
+        """Add safety-alignment compliance columns to results table.
+
+        These fields support granular compliance logging for the TAIF-funded
+        safety layer.  They track whether the firewall's post-execution
+        validator detected an alignment failure and capture the raw payload
+        that triggered the security exception for forensic analysis.
+
+        Fields:
+            alignment_failure_triggered (INTEGER):
+                0 = result passed safety validation
+                1 = firewall detected the backend executed an unsafe prompt
+                Used by the router to penalise backends that game the scoring.
+
+            security_exception_payload (TEXT):
+                Raw prompt text or rule-match summary that caused the
+                alignment failure.  Stored for audit trail and compliance
+                reporting.  NULL when no failure was triggered.
+        """
+        try:
+            self.conn.execute(
+                "ALTER TABLE results ADD COLUMN "
+                "alignment_failure_triggered INTEGER DEFAULT 0"
+            )
+            self.conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Column already exists (idempotent)
+
+        try:
+            self.conn.execute(
+                "ALTER TABLE results ADD COLUMN "
+                "security_exception_payload TEXT DEFAULT NULL"
+            )
+            self.conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Column already exists (idempotent)
 
     # ── logging ──────────────────────────────────────────────────────────────
 
@@ -109,9 +140,26 @@ class TaskLogger:
         )
         self.conn.commit()
 
-    def log_result(self, result: TaskResult):
+    def log_result(
+        self,
+        result: TaskResult,
+        alignment_failure: bool = False,
+        security_payload: str | None = None,
+    ):
+        """Persist a task result with optional safety-alignment metadata.
+
+        Args:
+            result:             The TaskResult from the executor.
+            alignment_failure:  True if the firewall's post-execution validator
+                                detected that this backend executed an unsafe prompt.
+            security_payload:   Raw prompt or rule-match summary that triggered
+                                the alignment failure (for audit trail).
+        """
         self.conn.execute(
-            "INSERT OR REPLACE INTO results VALUES (?,?,?,?,?,?,?)",
+            "INSERT OR REPLACE INTO results "
+            "(task_id, backend_id, success, latency_ms, cost_usd, error, "
+            "timestamp, alignment_failure_triggered, security_exception_payload) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
             (
                 result.task_id,
                 result.backend_id,
@@ -120,6 +168,8 @@ class TaskLogger:
                 result.cost_estimate,
                 result.error,
                 time.time(),
+                int(alignment_failure),
+                security_payload,
             ),
         )
         self.conn.commit()

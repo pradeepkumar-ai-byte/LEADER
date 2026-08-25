@@ -303,10 +303,48 @@ class Router:
         self.registry = registry
         self.logger = logger
 
+        # ── Safety-alignment state (TAIF roadmap) ────────────────────────
+        #
+        # These properties are the structural hooks for the alignment layer.
+        # The firewall middleware will call penalize_backend() when a
+        # downstream backend executes an adversarial prompt successfully,
+        # preventing the evolutionary scorer from rewarding unsafe behaviour.
+
+        # Base penalty applied per alignment violation (subtracted from
+        # the backend's composite score in _evolved_score).
+        self.alignment_score_penalty: float = 0.5
+
+        # Tracks backends that have been flagged by the safety layer.
+        # Maps backend_id → cumulative violation count.
+        # Higher counts produce progressively stronger score suppression.
+        self.penalized_backends: dict[str, int] = {}
+
+    def penalize_backend(self, backend_id: str) -> None:
+        """Register an alignment violation against a backend.
+
+        Called by the firewall / post-execution validator when a backend
+        successfully executes an adversarial or unsafe prompt.  Each call
+        increments the violation count, producing progressively stronger
+        score suppression in _evolved_score().
+        """
+        self.penalized_backends[backend_id] = (
+            self.penalized_backends.get(backend_id, 0) + 1
+        )
+
+    def clear_penalty(self, backend_id: str) -> None:
+        """Remove all alignment penalties from a backend (operator override)."""
+        self.penalized_backends.pop(backend_id, None)
+
     def _evolved_score(self, spec: BackendSpec, category: TaskCategory) -> float:
         """
         Hybrid scoring: 50% historical win-rate, 30% static affinity, 20% human feedback.
         Falls back to static-only when no history exists.
+
+        Safety-alignment integration:
+            After computing the base composite score, an alignment penalty is
+            subtracted for backends that have been flagged by the firewall.
+            The penalty scales with the number of violations, preventing the
+            router from learning to prefer backends that execute unsafe prompts.
         """
         win_rates = self.logger.win_rates()
         latencies = self.logger.avg_latency()
@@ -328,14 +366,42 @@ class Router:
 
         # No history at all — use static score only
         if history_rate is None and feedback_score is None:
-            return static - latency_penalty
+            base_score = static - latency_penalty
+        else:
+            # Partial data — use what we have
+            hist_component = (history_rate * 2) if history_rate is not None else static
+            fb_component = (feedback_score * 2) if feedback_score is not None else static
 
-        # Partial data — use what we have
-        hist_component = (history_rate * 2) if history_rate is not None else static
-        fb_component = (feedback_score * 2) if feedback_score is not None else static
+            # 50% history, 30% static, 20% human feedback
+            base_score = (
+                (0.3 * static) + (0.5 * hist_component) + (0.2 * fb_component)
+                - latency_penalty
+            )
 
-        # 50% history, 30% static, 20% human feedback
-        return (0.3 * static) + (0.5 * hist_component) + (0.2 * fb_component) - latency_penalty
+        # ── ALIGNMENT PENALTY HOOK ───────────────────────────────────────
+        #
+        # If this backend has been flagged by the firewall's post-execution
+        # validator, apply a cumulative penalty.  This is the core mechanism
+        # that prevents "specification gaming" — a backend that executes
+        # adversarial prompts successfully will NOT be rewarded by the
+        # evolutionary scorer.
+        #
+        # Penalty formula:
+        #   penalty = base_penalty * violation_count
+        #   (capped so score never goes below -1.0)
+        #
+        # Future: replace linear scaling with exponential decay curve
+        #         so penalties fade over time if backend behaviour improves.
+
+        violation_count = self.penalized_backends.get(spec.id, 0)
+        if violation_count > 0:
+            alignment_deduction = min(
+                self.alignment_score_penalty * violation_count,
+                base_score + 1.0,  # floor at -1.0
+            )
+            base_score -= alignment_deduction
+
+        return base_score
 
     def decide(self, task: Task) -> RouteDecision:
         if task.category is None:
@@ -354,6 +420,22 @@ class Router:
                     "no extra software needed."
                 ),
             )
+
+        # ── RANKING WITH ALIGNMENT AWARENESS ─────────────────────────────
+        #
+        # The sort key calls _evolved_score() which now incorporates
+        # alignment penalties.  Backends with safety violations will be
+        # ranked lower, even if they have high win-rates and low latency.
+        #
+        # This is the primary defence against specification gaming:
+        # a rogue backend that "wins" by executing jailbreaks will see
+        # its score suppressed here, pushing safer alternatives higher
+        # in the fallback chain.
+        #
+        # Future integration points:
+        #   - Pre-sort filter: skip backends with violation_count > N
+        #   - Dynamic quarantine: temporarily remove repeat offenders
+        #   - Decay curve: reduce penalties over time if behaviour improves
 
         ranked = sorted(
             connected,
@@ -382,3 +464,4 @@ class Router:
             ),
             recommendation=rec,
         )
+
