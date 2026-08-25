@@ -18,7 +18,6 @@ from leader.circuit_breaker import (
 from leader.models import Task, TaskCategory, TaskResult
 from leader.router import Router
 
-
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
@@ -243,7 +242,8 @@ def test_violation_rate():
 
 
 def test_router_strips_blacklisted_from_candidates(
-    connected_registry, tmp_db,
+    connected_registry,
+    tmp_db,
 ):
     cb = CircuitBreaker()
     router = Router(connected_registry, tmp_db, circuit_breaker=cb)

@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from leader.circuit_breaker import CircuitBreaker
 from leader.executor import Executor, _is_retryable
 from leader.logger import TaskLogger
 from leader.models import RouteDecision, Task, TaskCategory, TaskResult
@@ -44,9 +45,11 @@ def fresh_registry(*connect_ids: str, extra_config: dict = None) -> Registry:
     return r
 
 
-def make_router(r: Registry, tmp_path: Path) -> Router:
+def make_router(
+    r: Registry, tmp_path: Path, breaker: CircuitBreaker | None = None
+) -> tuple[Router, TaskLogger]:
     logger = TaskLogger(tmp_path / "test.db")
-    return Router(r, logger), logger
+    return Router(r, logger, circuit_breaker=breaker), logger
 
 
 # ── classifier ────────────────────────────────────────────────────────────────
@@ -422,3 +425,57 @@ def test_is_retryable_helper():
     # Transient + side-effecting category → never retryable
     assert _is_retryable(ConnectionError(), msg_task) is False
     assert _is_retryable(OSError(), msg_task) is False
+
+
+# ── safety layer & circuit breaker matrix continuity ─────────────────────────
+
+
+def test_router_with_disabled_circuit_breaker(tmp_path):
+    """Router initialized with an inactive breaker routes normally without blocking."""
+    r = fresh_registry("openclaw", "hermes")
+    disabled_cb = CircuitBreaker(enabled=False)
+    router, _ = make_router(r, tmp_path, breaker=disabled_cb)
+
+    decision = router.decide(Task(prompt="write a script", category=TaskCategory.CODING))
+    assert decision.primary == "openclaw"
+    assert not router.breaker.enabled
+
+
+def test_router_clean_mock_output_validation_continuity(tmp_path):
+    """Clean mock output passes router response validation without penalty regressions."""
+    r = fresh_registry("openclaw")
+    router, _ = make_router(r, tmp_path)
+
+    clean_mock_result = TaskResult(
+        task_id="t-clean-01",
+        backend_id="openclaw",
+        output="Successfully executed python sorting algorithm.",
+        success=True,
+        latency_ms=42.0,
+    )
+
+    validated = router.validate_response(clean_mock_result)
+    assert validated.success is True
+    assert validated.error == ""
+    assert "openclaw" not in router.penalized_backends
+
+
+def test_router_matrix_continuity_with_penalties_and_clearing(tmp_path):
+    """Verifies that penalty state adjustments and clearances maintain expected rankings."""
+    r = fresh_registry("openclaw", "hermes")
+    router, _ = make_router(r, tmp_path)
+
+    # Both start clean
+    task = Task(prompt="write code", category=TaskCategory.CODING)
+    decision = router.decide(task)
+    assert decision.primary == "openclaw"
+
+    # Penalize openclaw
+    router.penalize_backend("openclaw")
+    assert router.penalized_backends["openclaw"] == 1
+
+    # Clear penalty
+    router.clear_penalty("openclaw")
+    assert "openclaw" not in router.penalized_backends
+    decision_after_clear = router.decide(task)
+    assert decision_after_clear.primary == "openclaw"

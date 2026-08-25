@@ -268,8 +268,8 @@ class CircuitBreaker:
     ):
         self.trip_threshold = trip_threshold
         self.immediate_severity = immediate_severity
-        self.signatures: tuple[ExploitSignature, ...] = (
-            _DEFAULT_SIGNATURES + tuple(extra_signatures)
+        self.signatures: tuple[ExploitSignature, ...] = _DEFAULT_SIGNATURES + tuple(
+            extra_signatures
         )
         self.enabled = enabled
 
@@ -339,8 +339,7 @@ class CircuitBreaker:
         state.last_violation = violation.timestamp
 
         logger.warning(
-            "Circuit breaker: %s violation on backend '%s' "
-            "[%s] severity=%.2f — %s",
+            "Circuit breaker: %s violation on backend '%s' " "[%s] severity=%.2f — %s",
             sig.violation_type.value,
             result.backend_id,
             sig.signature_id,
@@ -377,10 +376,7 @@ class CircuitBreaker:
 
     def blacklisted_ids(self) -> set[str]:
         """Return the set of backend IDs currently in OPEN (isolated) state."""
-        return {
-            bid for bid, state in self._states.items()
-            if state.state == BreakerState.OPEN
-        }
+        return {bid for bid, state in self._states.items() if state.state == BreakerState.OPEN}
 
     def is_blacklisted(self, backend_id: str) -> bool:
         """Check if a specific backend is currently isolated."""

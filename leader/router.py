@@ -340,9 +340,7 @@ class Router:
         increments the violation count, producing progressively stronger
         score suppression in _evolved_score().
         """
-        self.penalized_backends[backend_id] = (
-            self.penalized_backends.get(backend_id, 0) + 1
-        )
+        self.penalized_backends[backend_id] = self.penalized_backends.get(backend_id, 0) + 1
 
     def clear_penalty(self, backend_id: str) -> None:
         """Remove all alignment penalties from a backend (operator override)."""
@@ -445,8 +443,7 @@ class Router:
 
             # 50% history, 30% static, 20% human feedback
             base_score = (
-                (0.3 * static) + (0.5 * hist_component) + (0.2 * fb_component)
-                - latency_penalty
+                (0.3 * static) + (0.5 * hist_component) + (0.2 * fb_component) - latency_penalty
             )
 
         # ── ALIGNMENT PENALTY HOOK ───────────────────────────────────────
@@ -560,5 +557,3 @@ class Router:
             ),
             recommendation=rec,
         )
-
-

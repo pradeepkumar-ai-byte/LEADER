@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from leader.circuit_breaker import CircuitBreaker
 from leader.logger import TaskLogger
 from leader.models import Task, TaskCategory, TaskResult
 from leader.registry import CATALOGUE, Registry
@@ -51,9 +52,29 @@ def connected_registry(fresh_registry: Registry) -> Registry:
 
 
 @pytest.fixture
+def disabled_breaker() -> CircuitBreaker:
+    """Return an inactive CircuitBreaker instance for baseline router testing."""
+    return CircuitBreaker(enabled=False)
+
+
+@pytest.fixture
+def active_breaker() -> CircuitBreaker:
+    """Return an active CircuitBreaker instance."""
+    return CircuitBreaker(enabled=True)
+
+
+@pytest.fixture
 def router_with_history(connected_registry: Registry, tmp_db: TaskLogger) -> Router:
     """Return a Router with a connected registry and empty task history."""
     return Router(connected_registry, tmp_db)
+
+
+@pytest.fixture
+def router_with_disabled_breaker(
+    connected_registry: Registry, tmp_db: TaskLogger, disabled_breaker: CircuitBreaker
+) -> Router:
+    """Return a Router configured with an inactive CircuitBreaker."""
+    return Router(connected_registry, tmp_db, circuit_breaker=disabled_breaker)
 
 
 @pytest.fixture

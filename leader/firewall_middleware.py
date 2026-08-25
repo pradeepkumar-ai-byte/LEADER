@@ -308,9 +308,7 @@ def _shannon_entropy(text: str) -> float:
     counts = Counter(text)
     length = len(text)
     return -sum(
-        (count / length) * math.log2(count / length)
-        for count in counts.values()
-        if count > 0
+        (count / length) * math.log2(count / length) for count in counts.values() if count > 0
     )
 
 
@@ -457,12 +455,7 @@ class Firewall:
         # Normalise entropy: 0–4.5 = normal, 5.5+ = suspicious
         entropy_norm = min(max(entropy - 4.5, 0.0) / 3.0, 1.0)
 
-        composite = (
-            max_rule_weight
-            + stacking_bonus
-            + entropy_norm * 0.08
-            + char_anomaly * 0.07
-        )
+        composite = max_rule_weight + stacking_bonus + entropy_norm * 0.08 + char_anomaly * 0.07
         composite = min(composite, 1.0)
 
         # ── Phase 4: Determine verdict ───────────────────────────────────

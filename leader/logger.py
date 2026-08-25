@@ -108,8 +108,7 @@ class TaskLogger:
         """
         try:
             self.conn.execute(
-                "ALTER TABLE results ADD COLUMN "
-                "alignment_failure_triggered INTEGER DEFAULT 0"
+                "ALTER TABLE results ADD COLUMN " "alignment_failure_triggered INTEGER DEFAULT 0"
             )
             self.conn.commit()
         except sqlite3.OperationalError:
@@ -117,8 +116,7 @@ class TaskLogger:
 
         try:
             self.conn.execute(
-                "ALTER TABLE results ADD COLUMN "
-                "security_exception_payload TEXT DEFAULT NULL"
+                "ALTER TABLE results ADD COLUMN " "security_exception_payload TEXT DEFAULT NULL"
             )
             self.conn.commit()
         except sqlite3.OperationalError:
