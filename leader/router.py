@@ -13,8 +13,9 @@ from __future__ import annotations
 
 import re
 
+from .circuit_breaker import CircuitBreaker
 from .logger import TaskLogger
-from .models import RouteDecision, Task, TaskCategory
+from .models import RouteDecision, Task, TaskCategory, TaskResult
 from .registry import BackendSpec, Registry
 
 # ── Semantic Classifier ──────────────────────────────────────────────────────
@@ -299,9 +300,21 @@ def classify(prompt: str) -> TaskCategory:
 
 
 class Router:
-    def __init__(self, registry: Registry, logger: TaskLogger):
+    def __init__(
+        self,
+        registry: Registry,
+        logger: TaskLogger,
+        circuit_breaker: CircuitBreaker | None = None,
+    ):
         self.registry = registry
         self.logger = logger
+
+        # ── Safety circuit breaker (TAIF roadmap) ────────────────────────
+        #
+        # The circuit breaker scans every downstream response for exploit
+        # signatures and dynamically isolates compromised backends.
+        # If no breaker is provided, one is created with default settings.
+        self.breaker: CircuitBreaker = circuit_breaker or CircuitBreaker()
 
         # ── Safety-alignment state (TAIF roadmap) ────────────────────────
         #
@@ -334,6 +347,64 @@ class Router:
     def clear_penalty(self, backend_id: str) -> None:
         """Remove all alignment penalties from a backend (operator override)."""
         self.penalized_backends.pop(backend_id, None)
+
+    def validate_response(self, result: TaskResult) -> TaskResult:
+        """
+        Post-execution safety validation.
+
+        Passes the backend's response through the circuit breaker's exploit
+        scanner.  If a violation is detected:
+          1. The backend is penalized in the alignment scoring layer.
+          2. The circuit breaker tracks the violation (may trip to OPEN).
+          3. The result is marked as an alignment failure for compliance logging.
+          4. The result's success flag is overridden to False so the executor
+             treats it as a failure and proceeds to the next fallback.
+
+        This method should be called on every TaskResult BEFORE it is
+        returned to the caller or logged as a success.
+
+        Args:
+            result: The raw TaskResult from the executor.
+
+        Returns:
+            The same TaskResult, potentially with success=False if an
+            exploit was detected.
+        """
+        violation = self.breaker.scan_response(result)
+
+        if violation is None:
+            return result  # Clean — pass through unchanged
+
+        # ── Violation detected ───────────────────────────────────────────
+        #
+        # The backend executed an adversarial prompt successfully.
+        # Apply alignment penalty to suppress its future scoring.
+        self.penalize_backend(result.backend_id)
+
+        # Log the alignment failure to the compliance database
+        self.logger.log_result(
+            result,
+            alignment_failure=True,
+            security_payload=(
+                f"[{violation.signature_id}] {violation.violation_type.value}: "
+                f"{violation.matched_span[:200]}"
+            ),
+        )
+
+        # Override the result — the executor should NOT treat this as a
+        # successful execution.  Force fallback to the next backend.
+        return TaskResult(
+            task_id=result.task_id,
+            backend_id=result.backend_id,
+            output="",
+            success=False,
+            latency_ms=result.latency_ms,
+            error=(
+                f"Safety violation: {violation.violation_type.value} "
+                f"[{violation.signature_id}]. Backend response blocked."
+            ),
+            cost_estimate=result.cost_estimate,
+        )
 
     def _evolved_score(self, spec: BackendSpec, category: TaskCategory) -> float:
         """
@@ -421,6 +492,36 @@ class Router:
                 ),
             )
 
+        # ── CIRCUIT BREAKER FILTER ───────────────────────────────────────
+        #
+        # Strip blacklisted backends from the candidate pool BEFORE any
+        # scoring or ranking occurs.  This is a hard isolation — a tripped
+        # backend receives zero traffic regardless of its historical score.
+        #
+        # The blacklist is maintained by the circuit breaker's scan_response()
+        # method, which is called by validate_response() after every
+        # backend execution.
+
+        blacklisted = self.breaker.blacklisted_ids()
+        eligible = [s for s in connected if s.id not in blacklisted]
+
+        if not eligible:
+            # All connected backends are blacklisted — severe degradation.
+            # Return a clear error so the operator knows to intervene.
+            return RouteDecision(
+                primary="none",
+                fallback_chain=[],
+                rationale=(
+                    "All connected backends have been isolated by the safety "
+                    "circuit breaker due to alignment violations."
+                ),
+                recommendation=(
+                    "Run `leader backends` to review violation history. "
+                    "Use the circuit breaker's rehabilitate() method to "
+                    "restore a backend after investigation."
+                ),
+            )
+
         # ── RANKING WITH ALIGNMENT AWARENESS ─────────────────────────────
         #
         # The sort key calls _evolved_score() which now incorporates
@@ -431,14 +532,9 @@ class Router:
         # a rogue backend that "wins" by executing jailbreaks will see
         # its score suppressed here, pushing safer alternatives higher
         # in the fallback chain.
-        #
-        # Future integration points:
-        #   - Pre-sort filter: skip backends with violation_count > N
-        #   - Dynamic quarantine: temporarily remove repeat offenders
-        #   - Decay curve: reduce penalties over time if behaviour improves
 
         ranked = sorted(
-            connected,
+            eligible,
             key=lambda s: self._evolved_score(s, task.category),
             reverse=True,
         )
@@ -464,4 +560,5 @@ class Router:
             ),
             recommendation=rec,
         )
+
 
