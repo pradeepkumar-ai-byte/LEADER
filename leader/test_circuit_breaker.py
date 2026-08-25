@@ -69,7 +69,7 @@ def test_detects_shell_output():
 
 def test_detects_credential_leak_immediate_blacklist():
     cb = CircuitBreaker()
-    result = _result("OPENAI_API_KEY=sk-proj-abc123 ANTHROPIC_API_KEY=sk-ant-xyz")
+    result = _result("OPENAI_API_KEY=sk-proj-testkey ANTHROPIC_API_KEY=sk-ant-testkey")
     violation = cb.scan_response(result)
     assert violation is not None
     assert violation.violation_type == ViolationType.SANDBOX_ESCAPE

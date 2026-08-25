@@ -139,7 +139,7 @@ _DEFAULT_SIGNATURES: tuple[ExploitSignature, ...] = (
         description="Response includes raw file-system paths or environment dumps",
         pattern=re.compile(
             r"(HOME=\/|PATH=\/|"
-            r"OPENAI_API_KEY=sk-|ANTHROPIC_API_KEY=sk-ant-|"
+            r"(OPENAI|ANTHROPIC|OPENROUTER|AI)_API_KEY=sk-[a-zA-Z0-9_\-\.]+|"
             r"AWS_SECRET_ACCESS_KEY=)",
             re.IGNORECASE,
         ),
