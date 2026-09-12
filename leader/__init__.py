@@ -15,6 +15,17 @@ Quick start (3 lines):
 __version__ = "0.2.1"
 __author__ = "Pradeep Kumar (Krish)"
 
+from .bridges import (
+    AUTOGEN_AVAILABLE,
+    CREWAI_AVAILABLE,
+    LeaderAutoGenHook,
+    LeaderCrew,
+    LeaderCrewRouter,
+    LeaderGroupChatManager,
+    LeaderSpeakerSelector,
+    LeaderStepCallback,
+    LeaderTaskCallback,
+)
 from .exceptions import (
     AdapterLoadError,
     BackendNotFoundError,
@@ -36,6 +47,16 @@ from .sdk import Leader
 __all__ = [
     # SDK entry point
     "Leader",
+    # Framework Bridges
+    "LeaderCrew",
+    "LeaderGroupChatManager",
+    "LeaderSpeakerSelector",
+    "LeaderAutoGenHook",
+    "LeaderStepCallback",
+    "LeaderTaskCallback",
+    "LeaderCrewRouter",
+    "AUTOGEN_AVAILABLE",
+    "CREWAI_AVAILABLE",
     # Core types
     "Task",
     "TaskCategory",

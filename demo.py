@@ -3,7 +3,9 @@
 Leader – Demo script showing how to use the routing system
 """
 import asyncio
-from leader import Task, TaskCategory, Registry, Router, Executor, TaskLogger
+
+from leader import Executor, Registry, Router, Task, TaskCategory, TaskLogger
+
 
 async def main():
     print("\n" + "="*70)
@@ -44,7 +46,7 @@ async def main():
     for prompt, category in tasks:
         task = Task(prompt=prompt, category=category)
         decision = router.decide(task)
-        
+
         print(f"📌 Task: {prompt[:50]}...")
         print(f"   Category: {task.category.value if task.category else 'auto-detected'}")
         print(f"   Primary:  {decision.primary}")

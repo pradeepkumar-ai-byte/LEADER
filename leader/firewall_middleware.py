@@ -179,8 +179,8 @@ _RULES: tuple[_FirewallRule, ...] = (
         description="System prompt extraction attempt",
         pattern=re.compile(
             r"(show|print|reveal|output|display|repeat|echo)\s+"
-            r"(me\s+)?(your|the|all)?\s*(system\s+prompt|instructions|"
-            r"initial\s+prompt|hidden\s+prompt|rules|hidden\s+rules|above\s+text)",
+            r"(me\s+)?(your|the|all)?\s*(hidden\s+)?(system\s+)?"
+            r"(prompt|instructions|rules|initial\s+prompt|context|above\s+text)",
             re.IGNORECASE,
         ),
         weight=0.90,
@@ -520,3 +520,15 @@ class Firewall:
             f"Threat: {threat.value}. "
             f"Matched rules: [{rule_list}]."
         )
+
+    async def evaluate(self, prompt_or_task: str | Task) -> SafetyVerdict:
+        """Inspect a raw string prompt or Task object."""
+        if isinstance(prompt_or_task, str):
+            task = Task(prompt=prompt_or_task)
+        else:
+            task = prompt_or_task
+        return await self.inspect(task)
+
+
+# Public alias
+FirewallMiddleware = Firewall

@@ -150,11 +150,67 @@ leader setup autogen    # Step-by-step install + config instructions
 leader setup crewai     # Works for all 30+ adapters
 ```
 
-### 5. Docker Deployment
+### 5. Multi-Agent Framework Bridges (AutoGen & CrewAI Drop-in Security)
+
+Secure enterprise multi-agent workflows in **three lines of code**:
+
+#### Microsoft AutoGen
+```python
+from autogen import AssistantAgent, UserProxyAgent, GroupChat
+from leader.bridges.autogen import LeaderGroupChatManager, LeaderSpeakerSelector
+
+coder = AssistantAgent(name="Coder", llm_config={"model": "gpt-4o"})
+reviewer = AssistantAgent(name="Reviewer", llm_config={"model": "gpt-4o"})
+user_proxy = UserProxyAgent(name="Admin", human_input_mode="NEVER")
+
+groupchat = GroupChat(agents=[user_proxy, coder, reviewer], messages=[], max_round=10)
+
+# Drop-in secure manager: intercepts prompt injections, halts infinite ping-pong loops & drift
+manager = LeaderGroupChatManager(groupchat=groupchat, speaker_selector=LeaderSpeakerSelector())
+user_proxy.initiate_chat(manager, message="Refactor database connection pool and write unit tests")
+```
+
+#### CrewAI
+```python
+from crewai import Agent, Task, Process
+from leader.bridges.crewai import LeaderCrew, LeaderStepCallback, LeaderTaskCallback
+
+# Drop in LeaderCrew to automatically enforce prompt firewalls, drift tracking, and circuit breaker output validation
+crew = LeaderCrew(
+    agents=[researcher, writer],
+    tasks=[task1, task2],
+    process=Process.sequential,
+)
+result = crew.kickoff(inputs={"topic": "EV Battery Market 2026"})
+```
+
+> See [docs/PRODUCTION_INTEGRATION.md](docs/PRODUCTION_INTEGRATION.md) for full enterprise integration documentation.
+
+### 6. Docker Deployment
 ```bash
 docker-compose up -d                                    # Leader API server
 docker-compose -f docker-compose.adapters.yml up -d     # Adapter backends
 ```
+
+---
+
+## Load Stress Testing & Concurrency Benchmarks
+
+LEADER provides a dedicated, high-concurrency simulation engine (`evals/stress_test.py`) to benchmark async firewalls, loop detectors, circuit breakers, and SQLite WAL persistence under massive production workloads.
+
+```bash
+python -m evals.stress_test --concurrency 50 --total-requests 200
+```
+
+| Test Scenario | Total Operations | Throughput (RPS) | Latency P50 | Latency P99 | Safety Efficacy |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Benign Routing & Scoring** | 200 | 4,945.1 req/s | 0.16 ms | 0.55 ms | **100.0%** |
+| **Concurrent Adversarial Attacks** | 200 | 5,644.1 req/s | 0.16 ms | 0.43 ms | **100.0%** |
+| **Multi-Agent Drift & Loops** | 100 | 821.3 req/s | 1.01 ms | 8.27 ms | **100.0%** |
+| **Circuit Breaker Exploit Tripping** | 200 | 7,723.5 req/s | 0.09 ms | 0.25 ms | **100.0%** |
+| **SQLite WAL Persistence** | 200 | 4,904.9 req/s | 0.09 ms | 8.33 ms | **100.0%** |
+
+> See [evals/STRESS_TEST_REPORT.md](evals/STRESS_TEST_REPORT.md) for detailed empirical benchmark breakdown.
 
 ---
 
@@ -193,15 +249,18 @@ leader vscode-extension          # Generate VS Code / Cursor extension scaffold
 
 ## Test Suite
 
-Leader ships with **95+ unit, integration, and HTTP integration tests** covering:
+Leader ships with **193+ unit, integration, bridge, and load stress tests** covering:
 
+- Multi-agent framework drop-in bridges (AutoGen & CrewAI)
+- High-concurrency load stress testing (throughput, zero-drop rate, latency percentiles)
+- Feedback loop detection (2-agent ping-pong, N-cycles, depth limits) & semantic drift tracking
+- Safety circuit breakers & adversarial exploit isolation
 - Semantic classifier edge cases (35+ parametrised prompts)
-- Router evolved scoring with feedback loop
+- Router evolved scoring with feedback loop & anti-reward gaming penalties
 - Executor retry logic with side-effect safety guards
 - File snapshot backup/restore with path traversal protection
 - Auditor deduplication and malformed JSON handling
-- Real HTTP integration tests against a live FastAPI mock bridge
-- CLI end-to-end tests
+- Real HTTP integration tests against live FastAPI mock bridges
 
 ```bash
 pip install -e ".[dev]"
@@ -212,6 +271,9 @@ pytest leader/ -v
 
 ## Security
 
+* **Pre-Execution Firewall**: Real-time entropy, character anomaly, and prompt-injection signature inspection.
+* **Autonomous Circuit Breaker**: Response scanning for sandbox escapes and credential leaks with automatic backend isolation.
+* **Specification Gaming Prevention**: Alignment penalties decrement scoring for backends executing jailbreaks.
 * **Config Isolation**: `leader init` restricts config file permissions to `600` (owner read/write only) on Unix.
 * **Env-First Resolution**: API credentials are read from environment variables, preventing plain-text keys in config files.
 * **Path Traversal Protection**: Snapshot restore validates all paths stay within the project root.
@@ -224,22 +286,28 @@ pytest leader/ -v
 
 ```
 leader/
-├── __init__.py              # Public API surface & version
-├── models.py                # Task, TaskResult, RouteDecision, TaskCategory
+├── __init__.py              # Public API surface & framework bridge exports
+├── models.py                # Task, TaskResult, RouteDecision, ChainSession, ChainStep
 ├── exceptions.py            # Structured exception hierarchy
-├── router.py                # Semantic classifier + evolved scoring
+├── router.py                # Semantic classifier + evolved scoring + alignment penalties
 ├── registry.py              # Backend catalogue (30+ specs) + Registry
 ├── executor.py              # Dispatch, retry, fallback chain, parallel mode
-├── logger.py                # SQLite persistence + schema migrations
+├── firewall_middleware.py   # Async pre-execution firewall & anomaly detector
+├── circuit_breaker.py       # Runtime safety circuit breaker & endpoint isolation
+├── chain_diagnostics.py     # Feedback loop detector & semantic drift tracker
+├── logger.py                # SQLite WAL persistence + schema migrations v1, v2, v3
 ├── config.py                # YAML config loader + env var resolution
-├── sdk.py                   # Leader class (SDK entry point)
+├── sdk.py                   # Leader SDK entrypoint (run, run_chain, route)
 ├── cli.py                   # CLI commands (argparse)
 ├── server.py                # aiohttp REST API server
-├── middleware.py             # Drop-in aiohttp middleware
 ├── auditor.py               # Autonomous code review engine
 ├── file_utils.py            # Codebase gathering + snapshot backup/restore
 ├── setup_helper.py          # Backend installation guides
 ├── conftest.py              # Shared test fixtures
+├── bridges/                 # AutoGen & CrewAI drop-in wrappers and callbacks
+│   ├── __init__.py
+│   ├── autogen.py           # LeaderGroupChatManager, LeaderSpeakerSelector
+│   └── crewai.py            # LeaderCrew, LeaderStepCallback, LeaderTaskCallback
 ├── adapters/                # 31 backend adapters (base.py + implementations)
 └── plugins/                 # OpenClaw skill + webhook plugins
 ```
