@@ -17,6 +17,7 @@ from .circuit_breaker import CircuitBreaker
 from .logger import TaskLogger
 from .models import RouteDecision, Task, TaskCategory, TaskResult
 from .registry import BackendSpec, Registry
+from .telemetry import telemetry_registry
 
 # ── Semantic Classifier ──────────────────────────────────────────────────────
 # Each category has:
@@ -309,14 +310,14 @@ class Router:
         self.registry = registry
         self.logger = logger
 
-        # ── Safety circuit breaker (TAIF roadmap) ────────────────────────
+        # ── Safety circuit breaker architecture ──────────────────────────
         #
         # The circuit breaker scans every downstream response for exploit
         # signatures and dynamically isolates compromised backends.
         # If no breaker is provided, one is created with default settings.
         self.breaker: CircuitBreaker = circuit_breaker or CircuitBreaker()
 
-        # ── Safety-alignment state (TAIF roadmap) ────────────────────────
+        # ── Safety-alignment state ───────────────────────────────────────
         #
         # These properties are the structural hooks for the alignment layer.
         # The firewall middleware will call penalize_backend() when a
@@ -375,6 +376,12 @@ class Router:
 
         # ── Violation detected ───────────────────────────────────────────
         #
+        # Record violation to Prometheus telemetry metrics
+        telemetry_registry.increment_counter(
+            "leader_circuit_breaker_violations_total",
+            {"backend_id": result.backend_id, "signature_id": violation.signature_id},
+        )
+
         # The backend executed an adversarial prompt successfully.
         # Apply alignment penalty to suppress its future scoring.
         self.penalize_backend(result.backend_id)
@@ -474,6 +481,12 @@ class Router:
     def decide(self, task: Task) -> RouteDecision:
         if task.category is None:
             task.category = classify(task.prompt)
+
+        # Record routing request to Prometheus metrics
+        telemetry_registry.increment_counter(
+            "leader_routing_requests_total",
+            {"category": task.category.value if task.category else "general"},
+        )
 
         connected = self.registry.connected()
 

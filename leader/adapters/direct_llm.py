@@ -81,35 +81,35 @@ class DirectLLMAdapter(BaseAdapter):
             "max_tokens": 4096,
             "messages": [{"role": "user", "content": task.prompt}],
         }
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=120)
-            ) as resp:
-                latency = (time.monotonic() - t0) * 1000
-                data = await resp.json()
-                if resp.status == 200:
-                    output = data["content"][0]["text"]
-                    input_tokens = data.get("usage", {}).get("input_tokens", 0)
-                    output_tokens = data.get("usage", {}).get("output_tokens", 0)
-                    # rough cost estimate (claude-sonnet-4-6 pricing)
-                    cost = (input_tokens * 3 + output_tokens * 15) / 1_000_000
-                    return TaskResult(
-                        task_id=task.task_id,
-                        backend_id="direct_llm",
-                        output=output,
-                        success=True,
-                        latency_ms=latency,
-                        cost_estimate=cost,
-                    )
-                else:
-                    return TaskResult(
-                        task_id=task.task_id,
-                        backend_id="direct_llm",
-                        output="",
-                        success=False,
-                        latency_ms=latency,
-                        error=f"HTTP {resp.status}: {data}",
-                    )
+        session = await self.get_session()
+        async with session.post(
+            url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=self._timeout_s)
+        ) as resp:
+            latency = (time.monotonic() - t0) * 1000
+            data = await resp.json()
+            if resp.status == 200:
+                output = data["content"][0]["text"]
+                input_tokens = data.get("usage", {}).get("input_tokens", 0)
+                output_tokens = data.get("usage", {}).get("output_tokens", 0)
+                # rough cost estimate (claude-sonnet-4-6 pricing)
+                cost = (input_tokens * 3 + output_tokens * 15) / 1_000_000
+                return TaskResult(
+                    task_id=task.task_id,
+                    backend_id="direct_llm",
+                    output=output,
+                    success=True,
+                    latency_ms=latency,
+                    cost_estimate=cost,
+                )
+            else:
+                return TaskResult(
+                    task_id=task.task_id,
+                    backend_id="direct_llm",
+                    output="",
+                    success=False,
+                    latency_ms=latency,
+                    error=f"HTTP {resp.status}: {data}",
+                )
 
     async def _call_openai_compat(self, task, url, api_key, model, t0, provider):
         headers = {
@@ -117,37 +117,37 @@ class DirectLLMAdapter(BaseAdapter):
             "Content-Type": "application/json",
         }
         if provider == "openrouter":
-            headers["HTTP-Referer"] = "https://github.com/leader-agent/leader"
+            headers["HTTP-Referer"] = "https://github.com/pradeepkumar-ai-byte/LEADER"
         payload = {
             "model": model,
             "messages": [{"role": "user", "content": task.prompt}],
         }
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=120)
-            ) as resp:
-                latency = (time.monotonic() - t0) * 1000
-                data = await resp.json()
-                if resp.status == 200:
-                    output = data["choices"][0]["message"]["content"]
-                    usage = data.get("usage", {})
-                    cost = (
-                        usage.get("prompt_tokens", 0) * 2.5 + usage.get("completion_tokens", 0) * 10
-                    ) / 1_000_000
-                    return TaskResult(
-                        task_id=task.task_id,
-                        backend_id="direct_llm",
-                        output=output,
-                        success=True,
-                        latency_ms=latency,
-                        cost_estimate=cost,
-                    )
-                else:
-                    return TaskResult(
-                        task_id=task.task_id,
-                        backend_id="direct_llm",
-                        output="",
-                        success=False,
-                        latency_ms=latency,
-                        error=f"HTTP {resp.status}: {data}",
-                    )
+        session = await self.get_session()
+        async with session.post(
+            url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=self._timeout_s)
+        ) as resp:
+            latency = (time.monotonic() - t0) * 1000
+            data = await resp.json()
+            if resp.status == 200:
+                output = data["choices"][0]["message"]["content"]
+                usage = data.get("usage", {})
+                cost = (
+                    usage.get("prompt_tokens", 0) * 2.5 + usage.get("completion_tokens", 0) * 10
+                ) / 1_000_000
+                return TaskResult(
+                    task_id=task.task_id,
+                    backend_id="direct_llm",
+                    output=output,
+                    success=True,
+                    latency_ms=latency,
+                    cost_estimate=cost,
+                )
+            else:
+                return TaskResult(
+                    task_id=task.task_id,
+                    backend_id="direct_llm",
+                    output="",
+                    success=False,
+                    latency_ms=latency,
+                    error=f"HTTP {resp.status}: {data}",
+                )

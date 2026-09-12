@@ -2,22 +2,23 @@
 """
 Leader – Demo script showing how to use the routing system
 """
+
 import asyncio
 
 from leader import Executor, Registry, Router, Task, TaskCategory, TaskLogger
 
 
 async def main():
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Leader Demo – Intelligent Task Routing".center(70))
-    print("="*70 + "\n")
+    print("=" * 70 + "\n")
 
     # Build components
     print("[1/4] Initializing Leader components...")
     registry = Registry()
     logger = TaskLogger()
     router = Router(registry, logger)
-    executor = Executor(registry)
+    _ = Executor(registry)
     print("✓ Registry, Logger, Router, and Executor ready\n")
 
     # Check what backends are connected
@@ -64,9 +65,10 @@ async def main():
     print("  ✓ Selects the best-suited backend (or evolves based on your history)")
     print("  ✓ Provides fallback chains for reliability")
     print("  ✓ Suggests better backends to connect for improvements")
-    print("\nTo execute a task, run:  leader run \"your task here\"")
+    print('\nTo execute a task, run:  leader run "your task here"')
     print("To add backends, edit:   ~/.leader/config.yaml")
     print("=" * 70 + "\n")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

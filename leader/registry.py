@@ -6,9 +6,23 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Optional
 
 from .models import TaskCategory
+
+
+class AdapterTier(str, Enum):
+    """
+    Adapter maturity classification:
+      TIER_1_NATIVE: Direct in-process SDK execution with full feature parity.
+      TIER_2_PROTOCOL: Standardized OpenAPI/REST/SSE microservice proxy with connection pooling.
+      TIER_3_WEBHOOK: Asynchronous webhook ingestion and low-code workflow pipeline connectors.
+    """
+
+    TIER_1_NATIVE = "tier_1_native"
+    TIER_2_PROTOCOL = "tier_2_protocol"
+    TIER_3_WEBHOOK = "tier_3_webhook"
 
 
 @dataclass
@@ -22,6 +36,7 @@ class BackendSpec:
     adapter_class: str
     connected: bool = False
     config: dict = field(default_factory=dict)
+    tier: AdapterTier = AdapterTier.TIER_2_PROTOCOL
 
 
 CATALOGUE: dict[str, BackendSpec] = {
@@ -36,8 +51,9 @@ CATALOGUE: dict[str, BackendSpec] = {
             TaskCategory.GENERAL,
         ],
         weaknesses=[TaskCategory.MESSAGING, TaskCategory.AUTOMATION],
-        homepage="https://github.com/leader-agent/leader",
+        homepage="https://github.com/pradeepkumar-ai-byte/LEADER",
         adapter_class="leader.adapters.direct_llm.DirectLLMAdapter",
+        tier=AdapterTier.TIER_1_NATIVE,
     ),
     "openclaw": BackendSpec(
         id="openclaw",
@@ -101,6 +117,7 @@ CATALOGUE: dict[str, BackendSpec] = {
         weaknesses=[],
         homepage="https://github.com/microsoft/autogen",
         adapter_class="leader.adapters.autogen.AutogenAdapter",
+        tier=AdapterTier.TIER_1_NATIVE,
     ),
     "taskweaver": BackendSpec(
         id="taskweaver",
@@ -119,6 +136,7 @@ CATALOGUE: dict[str, BackendSpec] = {
         weaknesses=[TaskCategory.CREATIVE],
         homepage="https://github.com/n8n-io/n8n",
         adapter_class="leader.adapters.n8n.N8NAdapter",
+        tier=AdapterTier.TIER_3_WEBHOOK,
     ),
     "make": BackendSpec(
         id="make",
@@ -128,6 +146,7 @@ CATALOGUE: dict[str, BackendSpec] = {
         weaknesses=[TaskCategory.CREATIVE],
         homepage="https://www.make.com",
         adapter_class="leader.adapters.make.MakeAdapter",
+        tier=AdapterTier.TIER_3_WEBHOOK,
     ),
     "zapier": BackendSpec(
         id="zapier",
@@ -137,6 +156,7 @@ CATALOGUE: dict[str, BackendSpec] = {
         weaknesses=[TaskCategory.CODING],
         homepage="https://www.zapier.com",
         adapter_class="leader.adapters.zapier.ZapierAdapter",
+        tier=AdapterTier.TIER_3_WEBHOOK,
     ),
     "babyagi": BackendSpec(
         id="babyagi",
@@ -200,6 +220,7 @@ CATALOGUE: dict[str, BackendSpec] = {
         weaknesses=[],
         homepage="https://github.com/BerriAI/litellm",
         adapter_class="leader.adapters.litellm.LiteLLMAdapter",
+        tier=AdapterTier.TIER_1_NATIVE,
     ),
     "vertexai": BackendSpec(
         id="vertexai",
@@ -209,6 +230,7 @@ CATALOGUE: dict[str, BackendSpec] = {
         weaknesses=[],
         homepage="https://cloud.google.com/vertex-ai",
         adapter_class="leader.adapters.vertexai.VertexAIAdapter",
+        tier=AdapterTier.TIER_1_NATIVE,
     ),
     "azureopenai": BackendSpec(
         id="azureopenai",
@@ -218,6 +240,7 @@ CATALOGUE: dict[str, BackendSpec] = {
         weaknesses=[],
         homepage="https://learn.microsoft.com/azure/ai-services/openai",
         adapter_class="leader.adapters.azureopenai.AzureOpenAIAdapter",
+        tier=AdapterTier.TIER_1_NATIVE,
     ),
     "llamaindex": BackendSpec(
         id="llamaindex",
@@ -236,6 +259,7 @@ CATALOGUE: dict[str, BackendSpec] = {
         weaknesses=[],
         homepage="https://aws.amazon.com/bedrock",
         adapter_class="leader.adapters.bedrock.BedrockAdapter",
+        tier=AdapterTier.TIER_1_NATIVE,
     ),
     "semantickernel": BackendSpec(
         id="semantickernel",
@@ -290,6 +314,7 @@ CATALOGUE: dict[str, BackendSpec] = {
         weaknesses=[TaskCategory.MESSAGING],
         homepage="https://github.com/joaomdmoura/crewAI",
         adapter_class="leader.adapters.crewai.CrewAIAdapter",
+        tier=AdapterTier.TIER_1_NATIVE,
     ),
     "generic": BackendSpec(
         id="generic",

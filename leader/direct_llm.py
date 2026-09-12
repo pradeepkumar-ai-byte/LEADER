@@ -117,7 +117,7 @@ class DirectLLMAdapter(BaseAdapter):
             "Content-Type": "application/json",
         }
         if provider == "openrouter":
-            headers["HTTP-Referer"] = "https://github.com/leader-agent/leader"
+            headers["HTTP-Referer"] = "https://github.com/pradeepkumar-ai-byte/LEADER"
         payload = {
             "model": model,
             "messages": [{"role": "user", "content": task.prompt}],

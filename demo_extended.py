@@ -2,31 +2,49 @@
 """
 Leader – Extended Demo showing all 30+ backends and advanced features
 """
+
 import asyncio
 
 from leader import Executor, Registry, Router, Task, TaskCategory, TaskLogger
 
 
 async def main():
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("Leader – Intelligent Multi-Backend AI Agent Router".center(80))
-    print("="*80 + "\n")
+    print("=" * 80 + "\n")
 
     # Build components
     print("[1/5] Initializing Leader with 30+ backends...")
     registry = Registry()
     logger = TaskLogger()
     router = Router(registry, logger)
-    executor = Executor(registry)
+    _ = Executor(registry)
 
     # Show all backends
     all_backends = registry.all()
     print(f"✓ {len(all_backends)} backends available:\n")
 
     # Group by type
-    ai_agents = ["openclaw", "autogpt", "agentgpt", "babyagi", "hermes", "zeroclaw", "nanoclaw", "reworkdai"]
+    ai_agents = [
+        "openclaw",
+        "autogpt",
+        "agentgpt",
+        "babyagi",
+        "hermes",
+        "zeroclaw",
+        "nanoclaw",
+        "reworkdai",
+    ]
     multiagent = ["autogen", "crewai", "metagpt", "taskweaver"]
-    llm = ["direct_llm", "litellm", "azureopenai", "vertexai", "bedrock", "huggingface", "replicate"]
+    llm = [
+        "direct_llm",
+        "litellm",
+        "azureopenai",
+        "vertexai",
+        "bedrock",
+        "huggingface",
+        "replicate",
+    ]
     frameworks = ["langchain", "llamaindex", "semantickernel", "griptape"]
     automation = ["n8n", "make", "zapier"]
     specialized = ["stabilityai", "mem0", "mlflow"]
@@ -67,7 +85,7 @@ async def main():
         if b:
             print(f"    • {b.display_name:<25} → {b.description[:45]}...")
 
-    print("\n" + "-"*80)
+    print("\n" + "-" * 80)
     print("[2/5] Demonstrating intelligent routing\n")
 
     # Demo tasks
@@ -93,7 +111,7 @@ async def main():
             print(f"   Fallbacks: {fallback_str}")
         print()
 
-    print("-"*80)
+    print("-" * 80)
     print("[3/5] Understanding the intelligent routing")
     print("""
 Leader automatically:
@@ -106,7 +124,7 @@ Leader automatically:
   ✓ Supports parallel execution (fastest wins)
 """)
 
-    print("-"*80)
+    print("-" * 80)
     print("[4/5] How to use Leader with your backends\n")
     print("1. Add backends to ~/.leader/config.yaml:")
     print("""
@@ -114,11 +132,11 @@ Leader automatically:
       autogpt:
         base_url: http://localhost:8000
         model: gpt-4
-      
+
       n8n:
         base_url: http://localhost:5678
         workflow_id: my-workflow
-      
+
       directllm:
         provider: anthropic
         api_key: sk-ant-YOUR-KEY
@@ -133,29 +151,29 @@ Leader automatically:
     leader feedback TASK_ID 5  # Rate results
 """)
 
-    print("\n" + "-"*80)
+    print("\n" + "-" * 80)
     print("[5/5] Why Leader is Different\n")
     print("""
   🎯 NOT just another wrapper
      • Unique: Sits ABOVE multiple backends, not replacing them
      • You keep using all your existing tools
      • Leader adds intelligence on top
-  
+
   📊 Actually learns from your usage
      • 60% history, 40% static knowledge
      • Evolves routing based on your patterns
      • Shows win-rates per backend per category
-  
+
   🤝 DevOps-friendly design
      • Works with 30+ real-world platforms
      • No database required (local SQLite)
      • Easy to self-host or manage
-  
+
   💡 Transparent recommendations
      • Tells you "connecting X would improve this"
      • Never pretends current result is optimal
      • Proactive backend optimization
-  
+
   ⚡ Production-ready features
      • Async/parallel execution
      • Comprehensive error handling
@@ -163,10 +181,11 @@ Leader automatically:
      • Cost estimation built-in
 """)
 
-    print("="*80 + "\n")
-    print("Get started now: leader init && leader run \"your first task\"")
+    print("=" * 80 + "\n")
+    print('Get started now: leader init && leader run "your first task"')
     print("View all backends: cat BACKENDS.md")
-    print("GitHub: https://github.com/leader-agent/leader\n")
+    print("GitHub: https://github.com/pradeepkumar-ai-byte/LEADER\n")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

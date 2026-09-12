@@ -9,6 +9,7 @@ Schema versioning: uses SQLite PRAGMA user_version to track migrations.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
 import time
@@ -26,7 +27,7 @@ from .models import (
 DEFAULT_DB = Path.home() / ".leader" / "history.db"
 
 # Current schema version — bump this when adding migrations
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 class TaskLogger:
@@ -69,9 +70,8 @@ class TaskLogger:
         if current < 3:
             self._migration_v3()
 
-        # Future migrations go here:
-        # if current < 4:
-        #     self._migration_v4()
+        if current < 4:
+            self._migration_v4()
 
         if current < SCHEMA_VERSION:
             self._set_version(SCHEMA_VERSION)
@@ -155,6 +155,25 @@ class TaskLogger:
                 action_taken        TEXT,
                 timestamp           REAL,
                 FOREIGN KEY (chain_id) REFERENCES chain_sessions(chain_id)
+            );
+        """)
+        self.conn.commit()
+
+    def _migration_v4(self):
+        """Add dead_letters table for persistent failure isolation and DLQ replay."""
+        self.conn.executescript("""
+            CREATE TABLE IF NOT EXISTS dead_letters (
+                dead_letter_id   TEXT PRIMARY KEY,
+                task_id          TEXT,
+                prompt           TEXT,
+                category         TEXT,
+                failed_backends  TEXT,
+                error_summary    TEXT,
+                failure_stage    TEXT,
+                retry_count      INTEGER DEFAULT 0,
+                resolved         INTEGER DEFAULT 0,
+                created_at       REAL,
+                resolved_at      REAL
             );
         """)
         self.conn.commit()
@@ -361,3 +380,156 @@ class TaskLogger:
                 "loops_isolated": loop_count or 0,
                 "chain_statuses": status_counts,
             }
+
+    # ── Dead-Letter Queue (DLQ) operations ────────────────────────────────────
+
+    def log_dead_letter(
+        self,
+        dead_letter_id: str,
+        task_id: str,
+        prompt: str,
+        category: str = "general",
+        failed_backends: list[str] | str | None = None,
+        error_summary: str = "",
+        failure_stage: str = "execution",
+    ) -> None:
+        """Persist a completely failed or unresolvable task into the Dead-Letter Queue."""
+        backends_str = (
+            json.dumps(failed_backends)
+            if isinstance(failed_backends, list)
+            else str(failed_backends or "[]")
+        )
+        with self._lock:
+            self.conn.execute(
+                """
+                INSERT OR REPLACE INTO dead_letters
+                (dead_letter_id, task_id, prompt, category, failed_backends, error_summary,
+                 failure_stage, retry_count, resolved, created_at, resolved_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, NULL)
+                """,
+                (
+                    dead_letter_id,
+                    task_id,
+                    prompt,
+                    category,
+                    backends_str,
+                    error_summary,
+                    failure_stage,
+                    time.time(),
+                ),
+            )
+            self.conn.commit()
+
+    def get_dead_letters(self, resolved: bool | None = None, limit: int = 50) -> list[dict]:
+        """Fetch dead-letter queue entries, optionally filtered by resolution status."""
+        with self._lock:
+            if resolved is None:
+                cur = self.conn.execute(
+                    """
+                    SELECT dead_letter_id, task_id, prompt, category, failed_backends,
+                           error_summary, failure_stage, retry_count, resolved, created_at, resolved_at
+                    FROM dead_letters
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                    """,
+                    (limit,),
+                )
+            else:
+                cur = self.conn.execute(
+                    """
+                    SELECT dead_letter_id, task_id, prompt, category, failed_backends,
+                           error_summary, failure_stage, retry_count, resolved, created_at, resolved_at
+                    FROM dead_letters
+                    WHERE resolved = ?
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                    """,
+                    (1 if resolved else 0, limit),
+                )
+
+            columns = [
+                "dead_letter_id",
+                "task_id",
+                "prompt",
+                "category",
+                "failed_backends",
+                "error_summary",
+                "failure_stage",
+                "retry_count",
+                "resolved",
+                "created_at",
+                "resolved_at",
+            ]
+            records = []
+            for row in cur.fetchall():
+                d = dict(zip(columns, row))
+                d["resolved"] = bool(d["resolved"])
+                try:
+                    d["failed_backends"] = json.loads(d["failed_backends"])
+                except Exception:
+                    pass
+                records.append(d)
+            return records
+
+    def get_dead_letter(self, dead_letter_id: str) -> dict | None:
+        """Fetch a single dead-letter queue entry by its ID."""
+        with self._lock:
+            cur = self.conn.execute(
+                """
+                SELECT dead_letter_id, task_id, prompt, category, failed_backends,
+                       error_summary, failure_stage, retry_count, resolved, created_at, resolved_at
+                FROM dead_letters
+                WHERE dead_letter_id = ?
+                """,
+                (dead_letter_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            columns = [
+                "dead_letter_id",
+                "task_id",
+                "prompt",
+                "category",
+                "failed_backends",
+                "error_summary",
+                "failure_stage",
+                "retry_count",
+                "resolved",
+                "created_at",
+                "resolved_at",
+            ]
+            d = dict(zip(columns, row))
+            d["resolved"] = bool(d["resolved"])
+            try:
+                d["failed_backends"] = json.loads(d["failed_backends"])
+            except Exception:
+                pass
+            return d
+
+    def resolve_dead_letter(self, dead_letter_id: str) -> bool:
+        """Mark a dead-letter entry as resolved."""
+        with self._lock:
+            cur = self.conn.execute(
+                """
+                UPDATE dead_letters
+                SET resolved = 1, resolved_at = ?
+                WHERE dead_letter_id = ?
+                """,
+                (time.time(), dead_letter_id),
+            )
+            self.conn.commit()
+            return cur.rowcount > 0
+
+    def increment_dead_letter_retry(self, dead_letter_id: str) -> None:
+        """Increment the retry counter for a dead-letter item."""
+        with self._lock:
+            self.conn.execute(
+                """
+                UPDATE dead_letters
+                SET retry_count = retry_count + 1
+                WHERE dead_letter_id = ?
+                """,
+                (dead_letter_id,),
+            )
+            self.conn.commit()

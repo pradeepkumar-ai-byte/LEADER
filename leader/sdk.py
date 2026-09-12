@@ -33,6 +33,7 @@ from .models import (
 )
 from .registry import Registry
 from .router import Router
+from .telemetry import telemetry_registry, trace_span
 
 
 class Leader:
@@ -86,31 +87,64 @@ class Leader:
         category: str | TaskCategory | None = None,
         parallel: bool = False,
         timeout: int | None = None,
+        dead_letter_on_failure: bool = True,
     ) -> TaskResult:
         """
         Route and execute a task. Returns a TaskResult.
 
         Args:
-            prompt:   The task description.
-            category: Optional task category (e.g. "coding", "research").
-                      Auto-classified if not provided.
-            parallel: If True, race all backends and return the fastest result.
-            timeout:  Override default timeout (seconds).
+            prompt:                 The task description.
+            category:               Optional task category (e.g. "coding", "research").
+                                    Auto-classified if not provided.
+            parallel:               If True, race all backends and return the fastest result.
+            timeout:                Override default timeout (seconds).
+            dead_letter_on_failure: If True, persists unresolvable task failures to SQLite DLQ.
         """
         if isinstance(category, str):
             category = TaskCategory(category)
 
         task = Task(prompt=prompt, category=category)
-        decision = self.router.decide(task)
+        cat_str = task.category.value if task.category else "general"
 
-        if timeout:
-            self.executor.timeout = timeout
+        with trace_span("leader.sdk.run", {"prompt_len": len(prompt), "category": cat_str}):
+            decision = self.router.decide(task)
 
-        self.logger.log_dispatch(task, decision)
-        result = await self.executor.run(task, decision, parallel=parallel)
-        self.logger.log_result(result)
+            if timeout:
+                self.executor.timeout = timeout
 
-        return result
+            self.logger.log_dispatch(task, decision)
+            result = await self.executor.run(task, decision, parallel=parallel)
+            self.logger.log_result(result)
+
+            # Record telemetry metrics
+            telemetry_registry.observe_histogram(
+                "leader_routing_latency_seconds",
+                result.latency_ms / 1000.0,
+                {"category": cat_str, "backend_id": result.backend_id},
+            )
+
+            # DLQ handling: If execution failed completely and no backend could fulfill
+            if not result.success and dead_letter_on_failure:
+                import uuid
+
+                dlq_id = f"dlq_{uuid.uuid4().hex[:12]}"
+                failed_backends = [decision.primary] + decision.fallback_chain
+                self.logger.log_dead_letter(
+                    dead_letter_id=dlq_id,
+                    task_id=task.task_id,
+                    prompt=task.prompt,
+                    category=cat_str,
+                    failed_backends=failed_backends,
+                    error_summary=result.error
+                    or "All execution pathways exhausted without success",
+                    failure_stage="executor_exhausted",
+                )
+                telemetry_registry.increment_counter(
+                    "leader_dead_letters_total",
+                    {"category": cat_str},
+                )
+
+            return result
 
     def run_sync(
         self,
@@ -118,6 +152,7 @@ class Leader:
         category: str | TaskCategory | None = None,
         parallel: bool = False,
         timeout: int | None = None,
+        dead_letter_on_failure: bool = True,
     ) -> TaskResult:
         """Synchronous wrapper around run(). Safe to call from non-async code."""
         try:
@@ -132,12 +167,24 @@ class Leader:
             with concurrent.futures.ThreadPoolExecutor() as pool:
                 future = pool.submit(
                     asyncio.run,
-                    self.run(prompt, category=category, parallel=parallel, timeout=timeout),
+                    self.run(
+                        prompt,
+                        category=category,
+                        parallel=parallel,
+                        timeout=timeout,
+                        dead_letter_on_failure=dead_letter_on_failure,
+                    ),
                 )
                 return future.result()
         else:
             return asyncio.run(
-                self.run(prompt, category=category, parallel=parallel, timeout=timeout)
+                self.run(
+                    prompt,
+                    category=category,
+                    parallel=parallel,
+                    timeout=timeout,
+                    dead_letter_on_failure=dead_letter_on_failure,
+                )
             )
 
     # ── multi-agent chain execution ──────────────────────────────────────────
@@ -196,6 +243,14 @@ class Leader:
                 parent_prompt=parent_prompt,
             )
             session.step_verdicts.append(verdict)
+            telemetry_registry.increment_counter(
+                "leader_chain_steps_total",
+                {"action": verdict.action.value},
+            )
+            telemetry_registry.observe_histogram(
+                "leader_semantic_drift_score",
+                verdict.drift_result.drift_score,
+            )
             if verdict.drift_result.drift_score > max_drift:
                 max_drift = verdict.drift_result.drift_score
 
@@ -342,3 +397,60 @@ class Leader:
     def is_ready(self) -> bool:
         """True if at least one backend is connected and available."""
         return self.connected_count > 0
+
+    # ── Dead-Letter Queue (DLQ) operations ────────────────────────────────────
+
+    def get_dead_letters(self, resolved: bool | None = None, limit: int = 50) -> list[dict]:
+        """Retrieve tasks in the dead-letter queue."""
+        return self.logger.get_dead_letters(resolved=resolved, limit=limit)
+
+    def get_dead_letter(self, dead_letter_id: str) -> dict | None:
+        """Retrieve a single dead-letter record by its ID."""
+        return self.logger.get_dead_letter(dead_letter_id)
+
+    def resolve_dead_letter(self, dead_letter_id: str) -> bool:
+        """Mark a dead-letter task as resolved."""
+        return self.logger.resolve_dead_letter(dead_letter_id)
+
+    async def replay_dead_letter(
+        self, dead_letter_id: str, timeout: int | None = None
+    ) -> TaskResult:
+        """
+        Replay a failed task from the dead-letter queue using current router states & models.
+        Increments the item's retry count and marks it resolved if successful.
+        """
+        dlq_item = self.logger.get_dead_letter(dead_letter_id)
+        if not dlq_item:
+            raise ValueError(f"Dead letter item '{dead_letter_id}' not found.")
+
+        self.logger.increment_dead_letter_retry(dead_letter_id)
+        cat = dlq_item.get("category")
+        result = await self.run(
+            prompt=dlq_item["prompt"],
+            category=cat,
+            timeout=timeout,
+            dead_letter_on_failure=False,
+        )
+        if result.success:
+            self.logger.resolve_dead_letter(dead_letter_id)
+        return result
+
+    def replay_dead_letter_sync(
+        self, dead_letter_id: str, timeout: int | None = None
+    ) -> TaskResult:
+        """Synchronously replay a failed task from the dead-letter queue."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(
+                    asyncio.run, self.replay_dead_letter(dead_letter_id, timeout=timeout)
+                )
+                return future.result()
+        else:
+            return asyncio.run(self.replay_dead_letter(dead_letter_id, timeout=timeout))

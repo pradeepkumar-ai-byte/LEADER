@@ -30,7 +30,7 @@ Leader can route tasks to any of these popular AI & automation platforms. Simply
 
 | Backend | Best For | Homepage |
 |---------|----------|----------|
-| **Direct LLM** | Built-in: Anthropic, OpenAI, OpenRouter | https://github.com/leader-agent/leader |
+| **Direct LLM** | Built-in: Anthropic, OpenAI, OpenRouter | https://github.com/pradeepkumar-ai-byte/LEADER |
 | **LiteLLM** | Unified 50+ LLM provider proxy | https://github.com/BerriAI/litellm |
 | **Azure OpenAI** | Enterprise Azure-hosted models | https://learn.microsoft.com/azure/ai-services/openai |
 | **Google Vertex AI** | Google's PaLM, CodeBison models | https://cloud.google.com/vertex-ai |

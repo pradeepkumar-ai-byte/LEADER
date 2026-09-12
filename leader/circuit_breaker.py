@@ -23,7 +23,7 @@ Design:
   • Pluggable   — custom signatures can be added at runtime via add_signature().
   • Recoverable — operators can rehabilitate backends via rehabilitate().
 
-This module is the enforcement arm of the TAIF-funded safety-alignment layer.
+This module is the runtime enforcement arm of LEADER's safety-alignment architecture.
 """
 
 from __future__ import annotations

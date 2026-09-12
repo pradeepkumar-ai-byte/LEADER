@@ -25,7 +25,7 @@ Integration point (sdk.py):
     if verdict.action == SafetyAction.BLOCK:
         return TaskResult(... success=False, error=verdict.summary ...)
 
-This module is the structural foundation for the TAIF-funded safety-alignment
+This module is the structural foundation for LEADER's safety-alignment
 layer that prevents specification gaming via adversarial prompt injection.
 """
 

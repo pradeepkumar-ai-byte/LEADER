@@ -26,6 +26,7 @@ import time
 from aiohttp import web
 
 from .sdk import Leader
+from .telemetry import telemetry_registry
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8585
@@ -68,6 +69,14 @@ def create_app(config_path: str | None = None) -> web.Application:
     app.router.add_get("/api/stats", handle_stats)
     app.router.add_post("/api/feedback", handle_feedback)
     app.router.add_get("/api/health", handle_health)
+
+    # Dead-Letter Queue (DLQ)
+    app.router.add_get("/api/dlq", handle_dlq_list)
+    app.router.add_post("/api/dlq/replay", handle_dlq_replay)
+    app.router.add_post("/api/dlq/resolve", handle_dlq_resolve)
+
+    # Prometheus Metrics Exposition
+    app.router.add_get("/metrics", handle_metrics)
 
     # Root — welcome page
     app.router.add_get("/", handle_root)
@@ -217,6 +226,77 @@ async def handle_health(request: web.Request) -> web.Response:
             "timestamp": time.time(),
         }
     )
+
+
+async def handle_metrics(request: web.Request) -> web.Response:
+    """GET /metrics — Prometheus standard exposition format."""
+    text = telemetry_registry.generate_prometheus_text()
+    return web.Response(
+        text=text,
+        content_type="text/plain",
+        charset="utf-8",
+        status=200,
+    )
+
+
+async def handle_dlq_list(request: web.Request) -> web.Response:
+    """GET /api/dlq — list dead-letter queue items."""
+    leader: Leader = request.app["leader"]
+    resolved_param = request.query.get("resolved")
+    resolved = None
+    if resolved_param is not None:
+        resolved = resolved_param.lower() in ("true", "1", "yes")
+    limit = int(request.query.get("limit", 50))
+
+    items = leader.get_dead_letters(resolved=resolved, limit=limit)
+    return _json_response({"dead_letters": items, "count": len(items)})
+
+
+async def handle_dlq_replay(request: web.Request) -> web.Response:
+    """POST /api/dlq/replay — replay a failed dead-letter task."""
+    leader: Leader = request.app["leader"]
+    try:
+        body = await request.json()
+    except Exception:
+        return _json_response({"error": "Invalid JSON body"}, status=400)
+
+    dlq_id = body.get("dead_letter_id")
+    if not dlq_id:
+        return _json_response({"error": "'dead_letter_id' is required"}, status=400)
+
+    try:
+        result = await leader.replay_dead_letter(dlq_id, timeout=body.get("timeout"))
+        return _json_response(
+            {
+                "dead_letter_id": dlq_id,
+                "success": result.success,
+                "output": result.output,
+                "error": result.error,
+                "backend_id": result.backend_id,
+                "latency_ms": result.latency_ms,
+            }
+        )
+    except ValueError as err:
+        return _json_response({"error": str(err)}, status=404)
+
+
+async def handle_dlq_resolve(request: web.Request) -> web.Response:
+    """POST /api/dlq/resolve — mark a dead-letter item as resolved."""
+    leader: Leader = request.app["leader"]
+    try:
+        body = await request.json()
+    except Exception:
+        return _json_response({"error": "Invalid JSON body"}, status=400)
+
+    dlq_id = body.get("dead_letter_id")
+    if not dlq_id:
+        return _json_response({"error": "'dead_letter_id' is required"}, status=400)
+
+    success = leader.resolve_dead_letter(dlq_id)
+    if not success:
+        return _json_response({"error": f"Dead letter item '{dlq_id}' not found."}, status=404)
+
+    return _json_response({"status": "resolved", "dead_letter_id": dlq_id})
 
 
 # ── entry point ──────────────────────────────────────────────────────────────
