@@ -146,7 +146,7 @@ _RULES: tuple[_FirewallRule, ...] = (
         pattern=re.compile(
             r"disregard\s+(all\s+)?(previous|prior|above|earlier|your)\s+"
             r"(instructions|prompts|rules|programming|directives|"
-            r"previous|prior)",
+            r"directions|context|guidelines|previous|prior)",
             re.IGNORECASE,
         ),
         weight=0.85,
@@ -157,7 +157,7 @@ _RULES: tuple[_FirewallRule, ...] = (
         description="Instruction override: 'forget everything'",
         pattern=re.compile(
             r"forget\s+(everything|all|anything)\s+(you|that)\s+"
-            r"(know|were|have\s+been)",
+            r"(know|were|have\s+been|programmed)",
             re.IGNORECASE,
         ),
         weight=0.80,
@@ -179,8 +179,8 @@ _RULES: tuple[_FirewallRule, ...] = (
         description="System prompt extraction attempt",
         pattern=re.compile(
             r"(show|print|reveal|output|display|repeat|echo)\s+"
-            r"(me\s+)?(your|the)\s+(system\s+prompt|instructions|"
-            r"initial\s+prompt|hidden\s+prompt|rules)",
+            r"(me\s+)?(your|the|all)?\s*(system\s+prompt|instructions|"
+            r"initial\s+prompt|hidden\s+prompt|rules|hidden\s+rules|above\s+text)",
             re.IGNORECASE,
         ),
         weight=0.90,
