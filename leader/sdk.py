@@ -19,9 +19,18 @@ import asyncio
 from pathlib import Path
 
 from . import config as cfg_module
+from .chain_diagnostics import ChainMonitor
 from .executor import Executor
 from .logger import TaskLogger
-from .models import RouteDecision, Task, TaskCategory, TaskResult
+from .models import (
+    ChainAction,
+    ChainSession,
+    ChainStep,
+    RouteDecision,
+    Task,
+    TaskCategory,
+    TaskResult,
+)
 from .registry import Registry
 from .router import Router
 
@@ -41,6 +50,12 @@ class Leader:
             parallel=True,
         )
 
+        # Multi-agent chain execution with loop isolation & drift diagnostics:
+        session = await leader.run_chain(
+            root_prompt="Analyze churn data and build report",
+            steps=["Extract DB metrics", "Plot chart", "Write executive summary"],
+        )
+
         # Synchronous usage:
         result = leader.run_sync("your task here")
     """
@@ -49,6 +64,7 @@ class Leader:
         self,
         config_path: Path | str | None = None,
         auto_load_config: bool = True,
+        chain_monitor: ChainMonitor | None = None,
     ):
         self.registry = Registry()
         self.warnings: list[str] = []
@@ -60,6 +76,7 @@ class Leader:
         self.logger = TaskLogger()
         self.router = Router(self.registry, self.logger)
         self.executor = Executor(self.registry)
+        self.chain_monitor = chain_monitor or ChainMonitor()
 
     # ── core API ─────────────────────────────────────────────────────────────
 
@@ -121,6 +138,153 @@ class Leader:
         else:
             return asyncio.run(
                 self.run(prompt, category=category, parallel=parallel, timeout=timeout)
+            )
+
+    # ── multi-agent chain execution ──────────────────────────────────────────
+
+    async def run_chain(
+        self,
+        root_prompt: str,
+        steps: list[ChainStep] | list[str],
+        chain_id: str | None = None,
+        stop_on_error: bool = True,
+        timeout: int | None = None,
+    ) -> ChainSession:
+        """
+        Execute an end-to-end multi-agent delegation chain with active loop isolation
+        and real-time semantic drift diagnostics.
+
+        Args:
+            root_prompt:   The user's original alignment prompt initiating the workflow.
+            steps:         List of ChainStep objects or prompt strings representing hops.
+            chain_id:      Optional explicit session ID (auto-generated if omitted).
+            stop_on_error: If True, halts execution if any step fails or trips safety breaks.
+            timeout:       Per-step execution timeout in seconds.
+
+        Returns:
+            ChainSession containing step verdicts, results, max drift, and final status.
+        """
+        import uuid
+
+        session_id = chain_id or uuid.uuid4().hex
+        session = ChainSession(
+            chain_id=session_id,
+            root_prompt=root_prompt,
+            status="completed",
+        )
+
+        parent_prompt: str | None = None
+        max_drift: float = 0.0
+
+        for i, step_item in enumerate(steps):
+            if isinstance(step_item, str):
+                step = ChainStep(
+                    prompt=step_item,
+                    step_index=i,
+                    chain_id=session_id,
+                    source_backend="user" if i == 0 else "agent_chain",
+                )
+            else:
+                step = step_item
+                step.chain_id = session_id
+                step.step_index = i
+
+            # 1. Pre-execution Chain Diagnostic Inspection (Loops + Drift)
+            verdict = self.chain_monitor.inspect_step(
+                step=step,
+                root_prompt=root_prompt,
+                parent_prompt=parent_prompt,
+            )
+            session.step_verdicts.append(verdict)
+            if verdict.drift_result.drift_score > max_drift:
+                max_drift = verdict.drift_result.drift_score
+
+            # 2. Handle Administrative Termination Actions
+            if verdict.action in (ChainAction.TERMINATE_LOOP, ChainAction.TERMINATE_DRIFT):
+                session.status = verdict.action.value
+                failed_res = TaskResult(
+                    task_id=step.step_id,
+                    backend_id="safety_chain_monitor",
+                    output="",
+                    success=False,
+                    latency_ms=verdict.latency_ms,
+                    error=verdict.summary,
+                )
+                session.results.append(failed_res)
+                self.logger.log_chain_step(step, verdict, output_payload="")
+                break
+
+            # 3. Route & Execute Step
+            task = Task(prompt=step.prompt, task_id=step.step_id)
+            decision = self.router.decide(task)
+            step.target_backend = decision.primary
+
+            if timeout:
+                self.executor.timeout = timeout
+
+            self.logger.log_dispatch(task, decision)
+            raw_result = await self.executor.run(task, decision)
+
+            # 4. Post-Execution Safety Validation (Circuit Breaker)
+            validated_result = self.router.validate_response(raw_result)
+            session.results.append(validated_result)
+
+            self.logger.log_result(validated_result)
+            self.logger.log_chain_step(step, verdict, output_payload=validated_result.output)
+
+            parent_prompt = step.prompt
+
+            if not validated_result.success and stop_on_error:
+                session.status = "step_failed"
+                break
+
+        session.total_steps = len(session.results)
+        session.max_drift = max_drift
+        self.logger.log_chain_session(session)
+
+        # Clear active in-memory chain tracking upon termination/completion
+        self.chain_monitor.loop_detector.clear_chain(session_id)
+
+        return session
+
+    def run_chain_sync(
+        self,
+        root_prompt: str,
+        steps: list[ChainStep] | list[str],
+        chain_id: str | None = None,
+        stop_on_error: bool = True,
+        timeout: int | None = None,
+    ) -> ChainSession:
+        """Synchronous wrapper for multi-agent chain execution."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(
+                    asyncio.run,
+                    self.run_chain(
+                        root_prompt=root_prompt,
+                        steps=steps,
+                        chain_id=chain_id,
+                        stop_on_error=stop_on_error,
+                        timeout=timeout,
+                    ),
+                )
+                return future.result()
+        else:
+            return asyncio.run(
+                self.run_chain(
+                    root_prompt=root_prompt,
+                    steps=steps,
+                    chain_id=chain_id,
+                    stop_on_error=stop_on_error,
+                    timeout=timeout,
+                )
             )
 
     # ── routing only (no execution) ──────────────────────────────────────────

@@ -22,14 +22,14 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from leader.circuit_breaker import CircuitBreaker
-from leader.firewall_middleware import Firewall, SafetyAction, SafetyVerdict
-from leader.models import Task
+from leader.circuit_breaker import CircuitBreaker  # noqa: E402
+from leader.firewall_middleware import Firewall, SafetyAction, SafetyVerdict  # noqa: E402
+from leader.models import Task  # noqa: E402
 
 try:
-    from .dataset import AdversarialDataset, TestCase, load_dataset
+    from .dataset import AdversarialDataset, load_dataset
 except ImportError:
-    from evals.dataset import AdversarialDataset, load_dataset
+    from evals.dataset import AdversarialDataset, load_dataset  # noqa: E402
 
 
 @dataclass

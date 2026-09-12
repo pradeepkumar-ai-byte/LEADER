@@ -13,12 +13,19 @@ import sqlite3
 import time
 from pathlib import Path
 
-from .models import RouteDecision, Task, TaskResult
+from .models import (
+    ChainSession,
+    ChainStep,
+    ChainStepVerdict,
+    RouteDecision,
+    Task,
+    TaskResult,
+)
 
 DEFAULT_DB = Path.home() / ".leader" / "history.db"
 
 # Current schema version — bump this when adding migrations
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 class TaskLogger:
@@ -50,9 +57,12 @@ class TaskLogger:
         if current < 2:
             self._migration_v2()
 
+        if current < 3:
+            self._migration_v3()
+
         # Future migrations go here:
-        # if current < 3:
-        #     self._migration_v3()
+        # if current < 4:
+        #     self._migration_v4()
 
         if current < SCHEMA_VERSION:
             self._set_version(SCHEMA_VERSION)
@@ -88,39 +98,57 @@ class TaskLogger:
         self.conn.commit()
 
     def _migration_v2(self):
-        """Add safety-alignment compliance columns to results table.
+        """Add safety-alignment compliance columns to results table."""
+        try:
+            self.conn.execute(
+                "ALTER TABLE results ADD COLUMN alignment_failure_triggered INTEGER DEFAULT 0"
+            )
+            self.conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Column already exists (idempotent)
 
-        These fields support granular compliance logging for the TAIF-funded
-        safety layer.  They track whether the firewall's post-execution
-        validator detected an alignment failure and capture the raw payload
-        that triggered the security exception for forensic analysis.
+        try:
+            self.conn.execute(
+                "ALTER TABLE results ADD COLUMN security_exception_payload TEXT DEFAULT NULL"
+            )
+            self.conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Column already exists (idempotent)
 
-        Fields:
-            alignment_failure_triggered (INTEGER):
-                0 = result passed safety validation
-                1 = firewall detected the backend executed an unsafe prompt
-                Used by the router to penalise backends that game the scoring.
+    def _migration_v3(self):
+        """Add multi-agent chain session and granular step diagnostic tables.
 
-            security_exception_payload (TEXT):
-                Raw prompt text or rule-match summary that caused the
-                alignment failure.  Stored for audit trail and compliance
-                reporting.  NULL when no failure was triggered.
+        Provides complete forensic auditability across inter-agent workflows,
+        recording loop detections, semantic drift distances, and administrative break actions.
         """
-        try:
-            self.conn.execute(
-                "ALTER TABLE results ADD COLUMN " "alignment_failure_triggered INTEGER DEFAULT 0"
-            )
-            self.conn.commit()
-        except sqlite3.OperationalError:
-            pass  # Column already exists (idempotent)
-
-        try:
-            self.conn.execute(
-                "ALTER TABLE results ADD COLUMN " "security_exception_payload TEXT DEFAULT NULL"
-            )
-            self.conn.commit()
-        except sqlite3.OperationalError:
-            pass  # Column already exists (idempotent)
+        self.conn.executescript("""
+            CREATE TABLE IF NOT EXISTS chain_sessions (
+                chain_id        TEXT PRIMARY KEY,
+                root_prompt     TEXT,
+                total_steps     INTEGER DEFAULT 0,
+                max_drift       REAL DEFAULT 0.0,
+                status          TEXT DEFAULT 'completed',
+                timestamp       REAL
+            );
+            CREATE TABLE IF NOT EXISTS chain_steps (
+                step_id             TEXT PRIMARY KEY,
+                chain_id            TEXT,
+                parent_step_id      TEXT,
+                step_index          INTEGER,
+                source_backend      TEXT,
+                target_backend      TEXT,
+                input_payload       TEXT,
+                output_payload      TEXT,
+                drift_score         REAL,
+                semantic_similarity REAL,
+                loop_detected       INTEGER DEFAULT 0,
+                loop_pattern        TEXT,
+                action_taken        TEXT,
+                timestamp           REAL,
+                FOREIGN KEY (chain_id) REFERENCES chain_sessions(chain_id)
+            );
+        """)
+        self.conn.commit()
 
     # ── logging ──────────────────────────────────────────────────────────────
 
@@ -214,3 +242,101 @@ class TaskLogger:
         """)
         # Normalise 1-5 rating to 0-1 range
         return {row[0]: (row[1] - 1) / 4.0 for row in cur.fetchall()}
+
+    # ── multi-agent chain telemetry ──────────────────────────────────────────
+
+    def log_chain_session(self, session: ChainSession) -> None:
+        """Persist or update high-level multi-agent workflow session metadata."""
+        self.conn.execute(
+            "INSERT OR REPLACE INTO chain_sessions VALUES (?,?,?,?,?,?)",
+            (
+                session.chain_id,
+                session.root_prompt,
+                session.total_steps,
+                session.max_drift,
+                session.status,
+                time.time(),
+            ),
+        )
+        self.conn.commit()
+
+    def log_chain_step(
+        self,
+        step: ChainStep,
+        verdict: ChainStepVerdict,
+        output_payload: str = "",
+    ) -> None:
+        """Persist granular step-level telemetry for a multi-agent delegation hop."""
+        self.conn.execute(
+            "INSERT OR REPLACE INTO chain_steps VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                step.step_id,
+                step.chain_id,
+                step.parent_step_id,
+                step.step_index,
+                step.source_backend,
+                step.target_backend or "router",
+                step.prompt,
+                output_payload,
+                verdict.drift_result.drift_score,
+                verdict.drift_result.similarity,
+                int(verdict.loop_result.is_loop),
+                verdict.loop_result.loop_type if verdict.loop_result.is_loop else None,
+                verdict.action.value,
+                time.time(),
+            ),
+        )
+        self.conn.commit()
+
+    def get_chain_history(self, chain_id: str) -> list[dict]:
+        """Return full ordered step telemetry history for an audited chain_id."""
+        cur = self.conn.execute(
+            """
+            SELECT step_id, parent_step_id, step_index, source_backend, target_backend,
+                   input_payload, output_payload, drift_score, semantic_similarity,
+                   loop_detected, loop_pattern, action_taken, timestamp
+            FROM chain_steps
+            WHERE chain_id = ?
+            ORDER BY step_index ASC, timestamp ASC
+            """,
+            (chain_id,),
+        )
+        columns = [
+            "step_id",
+            "parent_step_id",
+            "step_index",
+            "source_backend",
+            "target_backend",
+            "input_payload",
+            "output_payload",
+            "drift_score",
+            "semantic_similarity",
+            "loop_detected",
+            "loop_pattern",
+            "action_taken",
+            "timestamp",
+        ]
+        return [dict(zip(columns, row)) for row in cur.fetchall()]
+
+    def get_chain_analytics(self) -> dict:
+        """Return aggregate statistics across all recorded multi-agent chains."""
+        cur_sessions = self.conn.execute(
+            "SELECT COUNT(*), AVG(total_steps), MAX(max_drift) FROM chain_sessions"
+        )
+        s_count, s_avg_steps, s_max_drift = cur_sessions.fetchone()
+
+        cur_loops = self.conn.execute("SELECT COUNT(*) FROM chain_steps WHERE loop_detected = 1")
+        loop_count = cur_loops.fetchone()[0]
+
+        cur_terminations = self.conn.execute(
+            "SELECT status, COUNT(*) FROM chain_sessions GROUP BY status"
+        )
+        status_counts = {row[0]: row[1] for row in cur_terminations.fetchall()}
+
+        return {
+            "total_chains": s_count or 0,
+            "avg_chain_steps": round(s_avg_steps or 0.0, 2),
+            "peak_semantic_drift": round(s_max_drift or 0.0, 4),
+            "loops_isolated": loop_count or 0,
+            "chain_statuses": status_counts,
+        }

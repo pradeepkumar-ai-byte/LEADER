@@ -67,10 +67,9 @@ class BenchmarkReporter:
         detailed_cases_table = "\n".join(case_rows)
 
         report = f"""# 🛡️ LEADER Public Adversarial Evaluation Report
-
-> **Empirical Safety & Alignment Benchmark**  
-> **Evaluation Engine:** LEADER Pre-Execution Firewall + Runtime Circuit Breaker  
-> **Evaluated At:** `{timestamp}`  
+> **Empirical Safety & Alignment Benchmark**
+> **Evaluation Engine:** LEADER Pre-Execution Firewall + Runtime Circuit Breaker
+> **Evaluated At:** `{timestamp}`
 > **Total Test Vectors:** `{m.total_samples}` (`{m.adversarial_samples}` Adversarial, `{m.benign_samples}` Benign)
 
 ---
